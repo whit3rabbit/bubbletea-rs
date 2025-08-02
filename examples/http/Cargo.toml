@@ -1,0 +1,14 @@
+[package]
+name = "http-example"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "http-example"
+path = "main.rs"
+
+[dependencies]
+bubbletea-rs = { path = "../../" }
+crossterm = "0.27"
+tokio = { version = "1.25.0", features = ["full"] }
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }

@@ -1,0 +1,14 @@
+[package]
+name = "realtime-example"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "realtime"
+path = "main.rs"
+
+[dependencies]
+bubbletea-rs = { path = "../.." }
+crossterm = "0.27"
+tokio = { version = "1.0", features = ["full"] }
+rand = "0.8"

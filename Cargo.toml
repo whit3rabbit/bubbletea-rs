@@ -1,0 +1,76 @@
+[workspace]
+resolver = "2"
+members = [
+    ".",
+    "bubbles-rs",
+    "examples/autocomplete",
+    "examples/cellbuffer",
+    "examples/chat",
+    "examples/composable-views",
+    "examples/help",
+    "examples/http",
+    "examples/list-default",
+    "examples/list-simple",
+    "examples/progress-animated",
+    "examples/progress-download",
+    "examples/progress-static",
+    "examples/realtime",
+    "examples/result",
+    "examples/simple",
+    "examples/spinner",
+    "examples/spinners",
+    "examples/textarea",
+    "examples/textinput",
+    "examples/textinputs",
+    "examples/window-size",
+    "examples/altscreen-toggle",
+    "examples/autocomplete",
+    "examples/cellbuffer",
+    "examples/timer",
+]
+
+[package]
+name = "bubbletea-rs"
+exclude = ["examples"]
+autoexamples = false
+version = "0.0.1"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "The fun, functional, and stateful way to build terminal apps in Rust."
+readme = "README.md"
+repository = "https://github.com/whit3rabbit/bubbletea-rs"
+license = "MIT"
+keywords = ["tui", "cli", "terminal", "elm", "tea"]
+categories = ["command-line-interface", "asynchronous"]
+
+[features]
+default = ["tokio-runtime", "logging"]
+
+# Runtime selection
+tokio-runtime = ["tokio/full"]
+async-std-runtime = ["async-std"]
+
+# Optional functionality
+logging = ["log"]
+mouse-support = []
+bracketed-paste = []
+focus-reporting = []
+
+# Development features
+testing = []
+
+[dependencies]
+crossterm = { version = "0.27.0", features = ["event-stream"] }
+tokio = { version = "1.25.0", features = ["full"], optional = true }
+async-std = { version = "1.12", optional = true }
+thiserror = "1.0"
+anyhow = "1.0"
+log = { version = "0.4", optional = true }
+futures = "0.3"
+tokio-util = "0.7"
+pin-project = "1.0"
+parking_lot = "0.12.1"
+async-trait = "0.1.80"
+
+[dev-dependencies]
+anyhow = "1.0"
