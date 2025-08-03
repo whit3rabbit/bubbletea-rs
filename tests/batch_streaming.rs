@@ -43,11 +43,11 @@ async fn batch_streams_messages_as_ready() {
     let has_fast = batch_internal
         .messages
         .iter()
-        .any(|msg| is_type::<FastMsg>(msg));
+        .any(is_type::<FastMsg>);
     let has_slow = batch_internal
         .messages
         .iter()
-        .any(|msg| is_type::<SlowMsg>(msg));
+        .any(is_type::<SlowMsg>);
 
     assert!(has_fast, "batch should contain FastMsg");
     assert!(has_slow, "batch should contain SlowMsg");

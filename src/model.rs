@@ -54,13 +54,112 @@ use crate::{Cmd, Msg};
 /// }
 /// ```
 pub trait Model: Send + Sized + 'static {
-    /// Initialize the model with its initial state and optional command.
+    /// Initialize the model with its initial state and optional startup command.
+    ///
+    /// This method is called once when the application starts and should return
+    /// the initial state of your model along with an optional command to execute
+    /// immediately after initialization.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// - `Self`: The initialized model with its starting state
+    /// - `Option<Cmd>`: An optional command to run immediately (e.g., loading data)
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use bubbletea_rs::{Model, Cmd};
+    /// # struct MyModel { count: i32 }
+    /// # impl Model for MyModel {
+    /// fn init() -> (Self, Option<Cmd>) {
+    ///     // Start with a count of 0 and no initial command
+    ///     (MyModel { count: 0 }, None)
+    /// }
+    /// # fn update(&mut self, msg: bubbletea_rs::Msg) -> Option<Cmd> { None }
+    /// # fn view(&self) -> String { String::new() }
+    /// # }
+    /// ```
     fn init() -> (Self, Option<Cmd>);
 
-    /// Update the model in response to a message.
+    /// Update the model in response to a received message.
+    ///
+    /// This method is called whenever a message is received by your application.
+    /// It should update the model's state based on the message content and
+    /// optionally return a command to execute as a side effect.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The message to process. Use `msg.downcast_ref::<T>()` to check
+    ///   for specific message types.
+    ///
+    /// # Returns
+    ///
+    /// An optional command to execute after the update. Return `None` if no
+    /// side effects are needed.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use bubbletea_rs::{Model, Msg, Cmd, KeyMsg};
+    /// # struct MyModel { count: i32 }
+    /// # impl Model for MyModel {
+    /// # fn init() -> (Self, Option<Cmd>) { (MyModel { count: 0 }, None) }
+    /// fn update(&mut self, msg: Msg) -> Option<Cmd> {
+    ///     if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
+    ///         match key_msg.key {
+    ///             crossterm::event::KeyCode::Up => {
+    ///                 self.count += 1;
+    ///                 // No command needed for this update
+    ///                 None
+    ///             }
+    ///             _ => None,
+    ///         }
+    ///     } else {
+    ///         None
+    ///     }
+    /// }
+    /// # fn view(&self) -> String { String::new() }
+    /// # }
+    /// ```
     fn update(&mut self, msg: Msg) -> Option<Cmd>;
 
-    /// Render the model as a string for display in the terminal.
+    /// Render the current model state as a string for terminal display.
+    ///
+    /// This method is called whenever the terminal needs to be redrawn.
+    /// It should return a string representation of the current model state
+    /// that will be displayed to the user.
+    ///
+    /// # Returns
+    ///
+    /// A `String` containing the rendered view. This can include:
+    /// - ANSI escape codes for colors and styling
+    /// - Newlines for multi-line layouts
+    /// - Unicode characters for advanced formatting
+    ///
+    /// # Performance Notes
+    ///
+    /// This method may be called frequently during redraws, so avoid
+    /// expensive computations. Consider caching formatted strings if
+    /// the rendering is complex.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use bubbletea_rs::{Model, Msg, Cmd};
+    /// # struct MyModel { count: i32, name: String }
+    /// # impl Model for MyModel {
+    /// # fn init() -> (Self, Option<Cmd>) { (MyModel { count: 0, name: "App".to_string() }, None) }
+    /// # fn update(&mut self, msg: Msg) -> Option<Cmd> { None }
+    /// fn view(&self) -> String {
+    ///     format!(
+    ///         "Welcome to {}!\n\nCount: {}\n\nPress ↑/↓ to change",
+    ///         self.name,
+    ///         self.count
+    ///     )
+    /// }
+    /// # }
+    /// ```
     fn view(&self) -> String;
 }
 

@@ -3,6 +3,7 @@
 //! The `Program` sets up the terminal, handles input, executes commands, and renders
 //! the model's view.
 
+use crate::event::KillMsg;
 use crate::{Error, InputHandler, InputSource, Model, Msg, QuitMsg, Terminal, TerminalInterface};
 use futures::{future::FutureExt, select};
 use std::marker::PhantomData;
@@ -30,6 +31,11 @@ use tokio::io::AsyncWrite;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
+
+/// Alias for a model-aware message filter function used throughout Program.
+///
+/// This reduces repeated complex type signatures and improves readability.
+type MessageFilter<M> = Box<dyn Fn(&M, Msg) -> Option<Msg> + Send>;
 
 /// Configuration options for a `Program`.
 ///
@@ -63,6 +69,8 @@ pub struct ProgramConfig {
     pub event_channel_buffer: Option<usize>,
     /// Whether to enable memory usage monitoring.
     pub memory_monitoring: bool,
+    /// Optional environment variables to apply to external process commands.
+    pub environment: Option<HashMap<String, String>>,
 }
 
 impl std::fmt::Debug for ProgramConfig {
@@ -77,6 +85,7 @@ impl std::fmt::Debug for ProgramConfig {
             .field("signal_handler", &self.signal_handler)
             .field("bracketed_paste", &self.bracketed_paste)
             .field("cancellation_token", &self.cancellation_token)
+            .field("environment", &self.environment.as_ref().map(|m| m.len()))
             .finish()
     }
 }
@@ -102,6 +111,7 @@ impl Default for ProgramConfig {
             input_source: None,
             event_channel_buffer: Some(1000), // Default to bounded channel with 1000 message buffer
             memory_monitoring: false,         // Disabled by default
+            environment: None,
         }
     }
 }
@@ -114,17 +124,59 @@ pub struct ProgramBuilder<M: Model> {
     config: ProgramConfig,
     _phantom: PhantomData<M>,
     /// Optional model-aware message filter
-    message_filter: Option<Box<dyn Fn(&M, Msg) -> Option<Msg> + Send>>,
+    message_filter: Option<MessageFilter<M>>,
 }
 
 impl<M: Model> ProgramBuilder<M> {
     /// Creates a new `ProgramBuilder` with default configuration.
+    ///
+    /// This method is used internally by `Program::builder()` and should not
+    /// be called directly. Use `Program::builder()` instead.
+    ///
+    /// # Returns
+    ///
+    /// A new `ProgramBuilder` instance with default settings.
     pub(crate) fn new() -> Self {
         Self {
             config: ProgramConfig::default(),
             _phantom: PhantomData,
             message_filter: None,
         }
+    }
+
+    /// Sets environment variables to apply to external process commands created
+    /// via `command::exec_process`.
+    ///
+    /// These environment variables will be merged with the system environment
+    /// when spawning external processes through commands.
+    ///
+    /// # Arguments
+    ///
+    /// * `env` - A `HashMap` of environment variable key-value pairs.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::collections::HashMap;
+    /// use bubbletea_rs::Program;
+    /// # use bubbletea_rs::Model;
+    /// # struct MyModel;
+    /// # impl Model for MyModel {
+    /// #     fn init() -> (Self, Option<bubbletea_rs::Cmd>) { (MyModel, None) }
+    /// #     fn update(&mut self, _: bubbletea_rs::Msg) -> Option<bubbletea_rs::Cmd> { None }
+    /// #     fn view(&self) -> String { String::new() }
+    /// # }
+    ///
+    /// let mut env = HashMap::new();
+    /// env.insert("CUSTOM_VAR".to_string(), "value".to_string());
+    ///
+    /// let program = Program::<MyModel>::builder()
+    ///     .with_environment(env)
+    ///     .build();
+    /// ```
+    pub fn with_environment(mut self, env: HashMap<String, String>) -> Self {
+        self.config.environment = Some(env);
+        self
     }
 
     /// Sets whether to use the alternate screen buffer.
@@ -206,6 +258,13 @@ impl<M: Model> ProgramBuilder<M> {
     }
 
     /// Configures the program to use the default terminal input (stdin).
+    ///
+    /// This is the default behavior, so calling this method is optional.
+    /// It's provided for explicit configuration when needed.
+    ///
+    /// # Returns
+    ///
+    /// The `ProgramBuilder` instance for method chaining.
     pub fn input_tty(self) -> Self {
         // No-op for now, as stdin is used by default
         self
@@ -308,7 +367,7 @@ pub struct Program<M: Model> {
     /// Memory usage monitor (optional)
     memory_monitor: Option<crate::memory::MemoryMonitor>,
     /// Optional model-aware message filter
-    message_filter: Option<Box<dyn Fn(&M, Msg) -> Option<Msg> + Send>>,
+    message_filter: Option<MessageFilter<M>>,
     _phantom: PhantomData<M>,
 }
 
@@ -320,17 +379,27 @@ impl<M: Model> Program<M> {
 
     /// Creates a new `Program` instance with the given configuration.
     ///
+    /// This method is called internally by `ProgramBuilder::build()` and should not
+    /// be called directly. Use `Program::builder()` followed by `build()` instead.
+    ///
     /// # Arguments
     ///
     /// * `config` - The `ProgramConfig` to use for this program.
-    /// * `message_filter` - The model-aware message filter.
+    /// * `message_filter` - Optional model-aware message filter function.
     ///
     /// # Returns
     ///
     /// A `Result` containing the `Program` instance or an `Error` if initialization fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if:
+    /// - Terminal initialization fails
+    /// - Event channel setup fails
+    /// - Global state initialization fails
     fn new(
         config: ProgramConfig,
-        message_filter: Option<Box<dyn Fn(&M, Msg) -> Option<Msg> + Send>>,
+        message_filter: Option<MessageFilter<M>>,
     ) -> Result<Self, Error> {
         let (event_tx, event_rx) = if let Some(buffer_size) = config.event_channel_buffer {
             let (tx, rx) = mpsc::channel(buffer_size);
@@ -356,6 +425,10 @@ impl<M: Model> Program<M> {
 
         // Expose the event sender globally for command helpers
         let _ = crate::event::EVENT_SENDER.set(event_tx.clone());
+
+        // Expose command environment globally for exec_process
+        let _ = crate::command::COMMAND_ENV
+            .set(config.environment.clone().unwrap_or_default());
 
         let memory_monitor = if config.memory_monitoring {
             Some(crate::memory::MemoryMonitor::new())
@@ -459,7 +532,7 @@ impl<M: Model> Program<M> {
             });
         }
 
-        let result = loop {
+        let result = 'main_loop: loop {
             if let Some(c) = cmd.take() {
                 let event_tx = self.event_tx.clone();
                 let shutdown_token = self.shutdown_token.clone();
@@ -489,12 +562,20 @@ impl<M: Model> Program<M> {
                 }
                 event = self.event_rx.recv().fuse() => {
                     if let Some(mut msg) = event {
+                        // KillMsg triggers immediate termination without touching the model
+                        if msg.downcast_ref::<KillMsg>().is_some() {
+                            break Err(Error::ProgramKilled);
+                        }
                         if let Some(filter_fn) = &self.message_filter {
                             if let Some(filtered_msg) = filter_fn(&model, msg) {
                                 msg = filtered_msg;
                             } else {
                                 continue; // Message was filtered out
                             }
+                        }
+                        // If the filter produced a KillMsg, terminate immediately
+                        if msg.downcast_ref::<KillMsg>().is_some() {
+                            break Err(Error::ProgramKilled);
                         }
                         // Check for special internal messages
                         let mut should_quit = false;
@@ -558,6 +639,10 @@ impl<M: Model> Program<M> {
                                 // Process each message in the batch and accumulate resulting cmds
                                 let mut next_cmds: Vec<crate::command::Cmd> = Vec::new();
                                 for batch_item in batch_msg.messages {
+                                    if batch_item.downcast_ref::<KillMsg>().is_some() {
+                                        // Immediate termination
+                                        break 'main_loop Err(Error::ProgramKilled);
+                                    }
                                     if batch_item.downcast_ref::<QuitMsg>().is_some() {
                                         should_quit = true;
                                     }
@@ -647,6 +732,15 @@ impl<M: Model> Program<M> {
     }
 
     /// Clean up all spawned tasks on program shutdown.
+    ///
+    /// This method is called internally during program shutdown to ensure
+    /// all background tasks are properly terminated. It:
+    /// 1. Cancels the shutdown token to signal all tasks to stop
+    /// 2. Cancels all active timers
+    /// 3. Waits for tasks to complete with a timeout
+    /// 4. Aborts any remaining unresponsive tasks
+    ///
+    /// This prevents resource leaks and ensures clean program termination.
     async fn cleanup_tasks(&mut self) {
         // Cancel the shutdown token to signal all tasks to stop
         self.shutdown_token.cancel();
@@ -659,7 +753,7 @@ impl<M: Model> Program<M> {
         // Wait for all tasks to complete, with a timeout to avoid hanging
         let timeout = std::time::Duration::from_millis(500);
         let _ = tokio::time::timeout(timeout, async {
-            while let Some(_) = self.task_set.join_next().await {
+            while (self.task_set.join_next().await).is_some() {
                 // Task completed
             }
         })
@@ -684,19 +778,67 @@ impl<M: Model> Program<M> {
     /// Sends a message to the `Program`'s event loop.
     ///
     /// This is a convenience method that wraps the `sender()` method.
+    /// The message will be processed by the model's `update` method.
     ///
     /// # Arguments
     ///
-    /// * `msg` - The `Msg` to send.
+    /// * `msg` - The `Msg` to send to the event loop.
     ///
     /// # Returns
     ///
     /// A `Result` indicating success or a channel-related error if the message could not be sent.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if:
+    /// - The event channel is full (for bounded channels)
+    /// - The receiver has been dropped
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use bubbletea_rs::{Program, Model, KeyMsg};
+    /// # struct MyModel;
+    /// # impl Model for MyModel {
+    /// #     fn init() -> (Self, Option<bubbletea_rs::Cmd>) { (MyModel, None) }
+    /// #     fn update(&mut self, _: bubbletea_rs::Msg) -> Option<bubbletea_rs::Cmd> { None }
+    /// #     fn view(&self) -> String { String::new() }
+    /// # }
+    /// # async fn example() -> Result<(), bubbletea_rs::Error> {
+    /// let program = Program::<MyModel>::builder().build()?;
+    /// let key_msg = KeyMsg {
+    ///     key: crossterm::event::KeyCode::Enter,
+    ///     modifiers: crossterm::event::KeyModifiers::empty(),
+    /// };
+    /// program.send(Box::new(key_msg))?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn send(&self, msg: Msg) -> Result<(), Error> {
         self.event_tx.send(msg)
     }
 
     /// Sends a `QuitMsg` to the `Program`'s event loop, initiating a graceful shutdown.
+    ///
+    /// This causes the event loop to terminate gracefully after processing any
+    /// remaining messages in the queue. The terminal state will be properly restored.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use bubbletea_rs::{Program, Model};
+    /// # struct MyModel;
+    /// # impl Model for MyModel {
+    /// #     fn init() -> (Self, Option<bubbletea_rs::Cmd>) { (MyModel, None) }
+    /// #     fn update(&mut self, _: bubbletea_rs::Msg) -> Option<bubbletea_rs::Cmd> { None }
+    /// #     fn view(&self) -> String { String::new() }
+    /// # }
+    /// # async fn example() -> Result<(), bubbletea_rs::Error> {
+    /// let program = Program::<MyModel>::builder().build()?;
+    /// program.quit(); // Gracefully shutdown the program
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn quit(&self) {
         let _ = self.event_tx.send(Box::new(QuitMsg));
     }
@@ -715,19 +857,28 @@ impl<M: Model> Program<M> {
         self.memory_monitor.as_ref().map(|m| m.check_health())
     }
 
-    /// Sends a `QuitMsg` to the `Program`'s event loop, initiating a forceful shutdown.
+    /// Sends a `KillMsg` to the `Program`'s event loop, initiating an immediate termination.
     ///
-    /// Currently, this is identical to `quit()`, but may be extended in the future
-    /// to handle more aggressive termination.
+    /// Unlike `quit()`, which performs a graceful shutdown, `kill()` causes the event loop
+    /// to stop as soon as possible and returns `Error::ProgramKilled`.
     pub fn kill(&self) {
-        let _ = self.event_tx.send(Box::new(QuitMsg));
+        let _ = self.event_tx.send(Box::new(KillMsg));
     }
 
     /// Waits for the `Program` to finish execution.
     ///
     /// This method blocks until the program's event loop has exited.
-    /// Note: This is currently a no-op since the Program is consumed by run().
-    /// In a real implementation, you'd need to track the program's state separately.
+    ///
+    /// # Note
+    ///
+    /// This is currently a no-op since the `Program` is consumed by `run()`.
+    /// In a real implementation, you'd need to track the program's state separately,
+    /// similar to how Go's context.Context works with goroutines.
+    ///
+    /// # Future Implementation
+    ///
+    /// A future version might track program state separately to enable proper
+    /// waiting functionality without consuming the `Program` instance.
     pub async fn wait(&self) {
         // Since the Program is consumed by run(), we can't really wait for it.
         // This would need a different architecture to implement properly,
@@ -780,7 +931,26 @@ impl<M: Model> Program<M> {
     /// Prints a line to the terminal without going through the renderer.
     ///
     /// This is useful for debugging or for outputting messages that shouldn't
-    /// be part of the managed UI.
+    /// be part of the managed UI. The output bypasses the normal rendering
+    /// pipeline and goes directly to stdout.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string to print, a newline will be automatically added.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or an IO error if printing fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if stdout flushing fails.
+    ///
+    /// # Warning
+    ///
+    /// Using this method while the program is running may interfere with
+    /// the normal UI rendering. It's recommended to use this only for
+    /// debugging purposes or when the renderer is disabled.
     pub async fn println(&mut self, s: String) -> Result<(), Error> {
         if let Some(_terminal) = &mut self.terminal {
             use std::io::Write;
@@ -793,7 +963,26 @@ impl<M: Model> Program<M> {
     /// Prints formatted text to the terminal without going through the renderer.
     ///
     /// This is useful for debugging or for outputting messages that shouldn't
-    /// be part of the managed UI.
+    /// be part of the managed UI. The output bypasses the normal rendering
+    /// pipeline and goes directly to stdout without adding a newline.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - The string to print without adding a newline.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or an IO error if printing fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `Error` if stdout flushing fails.
+    ///
+    /// # Warning
+    ///
+    /// Using this method while the program is running may interfere with
+    /// the normal UI rendering. It's recommended to use this only for
+    /// debugging purposes or when the renderer is disabled.
     pub async fn printf(&mut self, s: String) -> Result<(), Error> {
         if let Some(_terminal) = &mut self.terminal {
             use std::io::Write;

@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Keep GitHub Actions up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 10
+
+  # Keep Rust dependencies up to date
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:30"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps(cargo)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"

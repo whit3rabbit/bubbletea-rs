@@ -4,6 +4,16 @@
 //! This library provides developers with the tools to build interactive terminal
 //! applications using the Model-View-Update (MVU) architecture pattern.
 //!
+//! ## Features
+//!
+//! - **Model-View-Update Architecture**: Clean separation of state, logic, and rendering
+//! - **Async Command System**: Non-blocking operations with command-based side effects
+//! - **Terminal Interface Abstraction**: Works with real terminals and test environments
+//! - **Comprehensive Event Handling**: Keyboard, mouse, window resize, and focus events
+//! - **Memory Monitoring**: Built-in memory usage tracking and leak detection
+//! - **Gradient Rendering**: Rich color gradients for progress bars and visual elements
+//! - **Flexible Input Sources**: Support for different input mechanisms and testing
+//!
 //! ## Quick Start
 //!
 //! ```rust,no_run
@@ -34,16 +44,48 @@
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ## Architecture Overview
+//!
+//! The library follows the Elm Architecture pattern:
+//!
+//! 1. **Model**: Your application state implementing the `Model` trait
+//! 2. **Messages**: Events that trigger state changes (keyboard, mouse, timers, etc.)
+//! 3. **Update**: Process messages and optionally issue commands
+//! 4. **View**: Render your model as a string for terminal display
+//! 5. **Commands**: Async operations that can produce future messages
+//!
+//! ## Memory Safety
+//!
+//! The framework includes built-in memory monitoring to help detect leaks and optimize
+//! performance. Use the `MemoryMonitor` to track allocations in your applications.
+//!
+//! ## Testing
+//!
+//! Testing is supported through the `DummyTerminal` which allows you to test your
+//! applications without requiring an actual terminal interface.
 
+#![warn(missing_docs)]
+
+/// Commands for async operations that produce messages.
 pub mod command;
+/// Error types and handling.
 pub mod error;
+/// Event types and message passing system.
 pub mod event;
+/// Gradient rendering utilities for progress bars and color transitions.
 pub mod gradient;
+/// Input handling abstraction for different sources.
 pub mod input;
+/// Logging utilities for debugging and monitoring.
 pub mod logging;
+/// Memory monitoring and leak detection.
 pub mod memory;
+/// The core Model trait defining application behavior.
 pub mod model;
+/// Program runtime and builder for TUI applications.
 pub mod program;
+/// Terminal interface abstraction and implementations.
 pub mod terminal;
 
 pub use command::{
@@ -59,8 +101,8 @@ pub use event::{
     DisableBracketedPasteMsg, DisableMouseMsg, DisableReportFocusMsg, EnableBracketedPasteMsg,
     EnableMouseAllMotionMsg, EnableMouseCellMotionMsg, EnableReportFocusMsg, EnterAltScreenMsg,
     EventReceiver, EventSender, ExitAltScreenMsg, FocusMsg, HideCursorMsg, InterruptMsg, KeyMsg,
-    MouseMsg, Msg, PasteMsg, PrintMsg, PrintfMsg, QuitMsg, RequestWindowSizeMsg, ResumeMsg,
-    SetWindowTitleMsg, ShowCursorMsg, SuspendMsg, WindowSizeMsg,
+    KillMsg, MouseMsg, Msg, PasteMsg, PrintMsg, PrintfMsg, QuitMsg, RequestWindowSizeMsg,
+    ResumeMsg, SetWindowTitleMsg, ShowCursorMsg, SuspendMsg, WindowSizeMsg,
 };
 pub use gradient::{
     charm_default_gradient, gradient_filled_segment, gradient_filled_segment_with_buffer, lerp_rgb,
@@ -78,7 +120,7 @@ pub mod prelude {
     //! Convenient re-exports of the most commonly used types.
 
     pub use crate::{Cmd, Error, Model, Msg, Program};
-    pub use crate::{KeyMsg, MouseMsg, PasteMsg, QuitMsg, WindowSizeMsg};
+    pub use crate::{KeyMsg, KillMsg, MouseMsg, PasteMsg, QuitMsg, WindowSizeMsg};
 
     #[cfg(feature = "logging")]
     pub use crate::log_to_file;

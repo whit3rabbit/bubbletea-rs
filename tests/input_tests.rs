@@ -52,17 +52,12 @@ async fn test_input_handler_key_event() -> Result<(), Error> {
     tokio::spawn(async move {
         let mut stream = MockEventStream::new(mock_events);
         while let Some(event_result) = stream.next().await {
-            if let Ok(event) = event_result {
-                match event {
-                    Event::Key(key_event) => {
-                        let msg = KeyMsg {
-                            key: key_event.code,
-                            modifiers: key_event.modifiers,
-                        };
-                        let _ = input_handler.event_tx.send(Box::new(msg));
-                    }
-                    _ => {}
-                }
+            if let Ok(Event::Key(key_event)) = event_result {
+                let msg = KeyMsg {
+                    key: key_event.code,
+                    modifiers: key_event.modifiers,
+                };
+                let _ = input_handler.event_tx.send(Box::new(msg));
             }
         }
     });
@@ -109,19 +104,14 @@ async fn test_input_handler_mouse_event() -> Result<(), Error> {
     tokio::spawn(async move {
         let mut stream = MockEventStream::new(mock_events);
         while let Some(event_result) = stream.next().await {
-            if let Ok(event) = event_result {
-                match event {
-                    Event::Mouse(mouse_event) => {
-                        let msg = MouseMsg {
-                            x: mouse_event.column,
-                            y: mouse_event.row,
-                            button: mouse_event.kind,
-                            modifiers: mouse_event.modifiers,
-                        };
-                        let _ = input_handler.event_tx.send(Box::new(msg));
-                    }
-                    _ => {}
-                }
+            if let Ok(Event::Mouse(mouse_event)) = event_result {
+                    let msg = MouseMsg {
+                        x: mouse_event.column,
+                        y: mouse_event.row,
+                        button: mouse_event.kind,
+                        modifiers: mouse_event.modifiers,
+                    };
+                    let _ = input_handler.event_tx.send(Box::new(msg));
             }
         }
     });
@@ -159,14 +149,9 @@ async fn test_input_handler_resize_event() -> Result<(), Error> {
     tokio::spawn(async move {
         let mut stream = MockEventStream::new(mock_events);
         while let Some(event_result) = stream.next().await {
-            if let Ok(event) = event_result {
-                match event {
-                    Event::Resize(width, height) => {
-                        let msg = WindowSizeMsg { width, height };
-                        let _ = input_handler.event_tx.send(Box::new(msg));
-                    }
-                    _ => {}
-                }
+            if let Ok(Event::Resize(width, height)) = event_result {
+                    let msg = WindowSizeMsg { width, height };
+                    let _ = input_handler.event_tx.send(Box::new(msg));
             }
         }
     });

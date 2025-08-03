@@ -57,7 +57,7 @@ async fn test_cmd_is_send() {
 
     let cmd = create_test_cmd(Box::new(QuitMsg) as Msg);
 
-    let handle = tokio::spawn(async move { cmd.await });
+    let handle = tokio::spawn(cmd);
 
     let result = handle.await.unwrap();
     assert!(result.is_some());

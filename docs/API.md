@@ -4,7 +4,7 @@ This document summarizes the public API surface of the `bubbletea-rs` crate and 
 
 - Crate entry: `src/lib.rs`
 - Primary modules: `command`, `error`, `event`, `gradient`, `input`, `logging` (feature-gated), `memory`, `model`, `program`, `terminal`
-- Common prelude: `bubbletea_rs::prelude::{Cmd, Error, Model, Msg, Program, KeyMsg, MouseMsg, QuitMsg, WindowSizeMsg}`
+- Common prelude: `bubbletea_rs::prelude::{Cmd, Error, Model, Msg, Program, KeyMsg, MouseMsg, QuitMsg, KillMsg, WindowSizeMsg}`
 
 Original Go Bubbletea documentation: [bubbletea](https://pkg.go.dev/github.com/charmbracelet/bubbletea)
 
@@ -34,7 +34,7 @@ Command constructors and helpers. Commands (`Cmd`) are async actions that can op
 
 Public re-exports:
 - Functions (commands):
-  - `quit()`, `interrupt()`
+  - `quit()`, `kill()`, `interrupt()`
   - Terminal control: `enter_alt_screen()`, `exit_alt_screen()`, `hide_cursor()`, `show_cursor()`, `clear_screen()`, `set_window_title(title: impl Into<String>)`
   - Mouse & focus reporting: `enable_mouse_cell_motion()`, `enable_mouse_all_motion()`, `disable_mouse()`, `enable_report_focus()`, `disable_report_focus()`, `enable_bracketed_paste()`, `disable_bracketed_paste()`
   - <a id="cmd-timers"></a> Timers: `tick(dur: Duration, msg: impl FnOnce() -> Msg)`, `every(dur: Duration, make_msg: impl Fn() -> Msg)`, `every_with_id(id: impl Into<String>, dur: Duration, make_msg: impl Fn() -> Msg)`, `cancel_timer(id: impl Into<String>)`, `cancel_all_timers()`
@@ -59,7 +59,7 @@ Message definitions and sender/receiver abstractions used by the runtime and inp
 Public re-exports (selected):
 - Core message alias: `Msg` (boxed `dyn Any + Send`)
 - User-input and system messages: `KeyMsg`, `MouseMsg`, `WindowSizeMsg`, `FocusMsg`, `BlurMsg`
-- Program control messages: `QuitMsg`, `InterruptMsg`, `SuspendMsg`, `ResumeMsg`
+- Program control messages: `QuitMsg`, `KillMsg`, `InterruptMsg`, `SuspendMsg`, `ResumeMsg`
 - Terminal control messages: `EnterAltScreenMsg`, `ExitAltScreenMsg`, `HideCursorMsg`, `ShowCursorMsg`, `ClearScreenMsg`, `SetWindowTitleMsg`, `EnableMouseCellMotionMsg`, `EnableMouseAllMotionMsg`, `DisableMouseMsg`, `EnableReportFocusMsg`, `DisableReportFocusMsg`, `EnableBracketedPasteMsg`, `DisableBracketedPasteMsg`, `RequestWindowSizeMsg`, `PrintMsg`, `PrintfMsg`
 - Event channels: `EventSender`, `EventReceiver`
 - Internal batching message: `BatchMsgInternal`
@@ -92,6 +92,9 @@ Public re-exports:
 - `ProgramBuilder<M: Model>`: fluent builder to construct `Program`
 - `ProgramConfig`: runtime configuration (terminal modes, rendering, panic handling, signal handling, etc.)
 - `MouseMotion`: mouse reporting mode enum (e.g., cell vs. all motion)
+
+Types:
+- `type MessageFilter<M> = Box<dyn Fn(&M, Msg) -> Option<Msg> + Send>`
 
 Typical usage:
 ```rust
@@ -137,7 +140,7 @@ Public re-exports when enabled:
 For convenience, import the prelude to get the most common items:
 
 ```rust
-use bubbletea_rs::prelude::{Cmd, Error, Model, Msg, Program, KeyMsg, MouseMsg, QuitMsg, WindowSizeMsg};
+use bubbletea_rs::prelude::{Cmd, Error, Model, Msg, Program, KeyMsg, MouseMsg, QuitMsg, KillMsg, WindowSizeMsg};
 ```
 
 ---
@@ -167,6 +170,7 @@ This section maps Go Bubble Tea concepts to their `bubbletea-rs` equivalents and
 
 ### Common Commands
 - Quit: Go `tea.Quit` → Rust `quit()`
+- Kill: Go `tea.Kill` → Rust `kill()`
 - Interrupt: Go `tea.Interrupt` → Rust `interrupt()`
 - Suspend/Resume (terminal): Go has `tea.Suspend`/`tea.Resume` messages in some contexts → Rust `suspend()`/`resume()` as messages and via commands that toggle terminal modes
 - Alt screen: Go `tea.EnterAltScreen`/`ExitAltScreen` → Rust `enter_alt_screen()`/`exit_alt_screen()`
@@ -185,7 +189,7 @@ This section maps Go Bubble Tea concepts to their `bubbletea-rs` equivalents and
 - Mouse: Go `tea.MouseMsg` → Rust `MouseMsg` (configure via `MouseMotion` in `ProgramConfig` or with mouse commands)
 - Window size: Go `tea.WindowSizeMsg` → Rust `WindowSizeMsg`
 - Focus/blur: Go `tea.FocusMsg`/`BlurMsg` → Rust `FocusMsg`/`BlurMsg`
-- Program control: Go `tea.QuitMsg`/`InterruptMsg` → Rust `QuitMsg`/`InterruptMsg`; `SuspendMsg`/`ResumeMsg` also available in Rust
+- Program control: Go `tea.QuitMsg`/`InterruptMsg` → Rust `QuitMsg`/`InterruptMsg`; `SuspendMsg`/`ResumeMsg` also available in Rust; Immediate termination: Go `tea.Kill`/`Program.Kill()` → Rust `kill()`/`Program::kill()` sending `KillMsg`
 
 ### Errors
 - Go typically returns `error` values from `program.Run()` → Rust uses `Result<_, Error>` where `Error` is a comprehensive enum (`error` module)
@@ -197,6 +201,7 @@ This section maps Go Bubble Tea concepts to their `bubbletea-rs` equivalents and
 - Rust `Msg` is type-erased; define and downcast your own message structs/enums to use strong typing across your app.
 - Rust offers built-in gradient utilities (`gradient` module), which are not part of Go Bubble Tea core.
 - Logging via `log_to_file` is feature-gated; enable the `logging` feature to use it.
+- `Program::kill()` and `kill()` command added for immediate termination, emitting `KillMsg`.
 
 ---
 
@@ -210,6 +215,7 @@ This section lists concrete function/type signatures as implemented.
 
 - <a id="cmd-core"></a> Core control
   - <a id="cmd-quit"></a> `fn quit() -> Cmd`
+  - <a id="cmd-kill"></a> `fn kill() -> Cmd`
   - <a id="cmd-interrupt"></a> `fn interrupt() -> Cmd`
   - <a id="cmd-suspend"></a> `fn suspend() -> Cmd`
 
@@ -280,7 +286,7 @@ This section lists concrete function/type signatures as implemented.
 - `bracketed_paste: bool` (default: `false`)
 - `output_writer: Option<Arc<Mutex<dyn AsyncWrite + Send + Unpin>>>` (default: `None`)
 - `cancellation_token: Option<CancellationToken>` (default: `None`)
-- `message_filter: Option<Box<dyn Fn(Msg) -> Option<Msg> + Send>>` (default: `None`)
+- `message_filter: Option<MessageFilter<M>>` (default: `None`)
 - `input_source: Option<InputSource>` (default: `None`)
 - `event_channel_buffer: Option<usize>` (default: `Some(1000)`)
 - `memory_monitoring: bool` (default: `false`)
@@ -301,6 +307,7 @@ See also: [Go options sweep](#go-options-sweep-non-deprecated) for Go → Rust o
 - `.output(writer)`
 - `.context(CancellationToken)`
 - `.filter(|Msg| -> Option<Msg> { ... })`
+- `.with_environment(std::collections::HashMap<String, String>)`
 
 Go upstream references (for option names; version-dependent):
 - WithAltScreen: https://github.com/charmbracelet/bubbletea/search?q=WithAltScreen
@@ -329,7 +336,7 @@ See also:
 ### event (selected)
 - `type Msg = Box<dyn Any + Send>`
 - Key types: `KeyMsg`, `MouseMsg`, `WindowSizeMsg`, `FocusMsg`, `BlurMsg`
-- Control: `QuitMsg`, `InterruptMsg`, `SuspendMsg`, `ResumeMsg`
+- Control: `QuitMsg`, `KillMsg`, `InterruptMsg`, `SuspendMsg`, `ResumeMsg`
 - Terminal: `EnterAltScreenMsg`, `ExitAltScreenMsg`, `HideCursorMsg`, `ShowCursorMsg`, `ClearScreenMsg`, `SetWindowTitleMsg`, `EnableMouseCellMotionMsg`, `EnableMouseAllMotionMsg`, `DisableMouseMsg`, `EnableReportFocusMsg`, `DisableReportFocusMsg`, `EnableBracketedPasteMsg`, `DisableBracketedPasteMsg`, `RequestWindowSizeMsg`, `PrintMsg(String)`, `PrintfMsg(String)`
 - Channels: `EventSender`, `EventReceiver`
 
@@ -351,6 +358,15 @@ See also:
 
 ## Common Usage Examples
 
+### Doctest: gradient::lerp_rgb
+```rust
+use bubbletea_rs::gradient::lerp_rgb;
+
+// At t = 0.5 between black and white, we expect mid-gray (127,127,127) or (128,128,128)
+let c = lerp_rgb((0,0,0), (255,255,255), 0.5);
+assert!(c == (127,127,127) || c == (128,128,128));
+```
+
 ### Ticking once and on an interval
 ```rust
 use bubbletea_rs::{Cmd, Msg, tick, every};
@@ -364,6 +380,41 @@ fn on_init_single_tick() -> Option<Cmd> {
 // Repeating message every 1s
 fn on_init_every() -> Option<Cmd> {
     Some(every(Duration::from_secs(1), |_d| Box::new("heartbeat".to_string()) as Msg))
+}
+```
+
+Rust (apply environment via ProgramBuilder::with_environment):
+
+```rust
+use std::collections::HashMap;
+use std::process::Command;
+use bubbletea::command::exec_process;
+use bubbletea::Program;
+
+#[derive(Debug)]
+struct GotEnv(String);
+
+fn configure_program_env() -> Program<MyModel> {
+    let mut env = HashMap::new();
+    env.insert("MY_VAR".to_string(), "hello".to_string());
+
+    // Building the Program sets the environment for all exec_process commands
+    Program::builder::<MyModel>()
+        .with_environment(env)
+        .without_renderer() // optional for headless/testing
+        .build()
+        .expect("program build")
+}
+
+fn read_var() -> Cmd {
+    // On Unix-like systems, use `sh -c` to print an env var.
+    // On Windows, use `cmd /C echo %MY_VAR%` (not shown here).
+    exec_process(Command::new("sh").arg("-c").arg("printf %s \"$MY_VAR\""), |out| {
+        match out {
+            Ok(o) => Some(Box::new(GotEnv(String::from_utf8_lossy(&o.stdout).to_string())) as Msg),
+            Err(e) => Some(Box::new(GotEnv(format!("ERR:{e}"))) as Msg),
+        }
+    })
 }
 ```
 
@@ -447,6 +498,16 @@ fn list_dir() -> Cmd {
 - Feature-gated logging
   - `log_to_file` is available behind the `logging` feature.
 
+### Quit vs Kill semantics
+
+- Go
+  - `tea.Quit` triggers a graceful shutdown. `Program.Quit()` stops after allowing pending processing to wrap up.
+  - `tea.Kill` (or `Program.Kill()`) triggers immediate termination.
+
+- Rust (`bubbletea-rs`)
+  - `quit()` command sends `QuitMsg`. The event loop marks `should_quit` and exits gracefully, returning `Ok(model)`.
+  - `kill()` command and `Program::kill()` send `KillMsg`. The event loop stops as soon as possible (also from inside `BatchMsgInternal` and after the message filter), returning `Err(Error::ProgramKilled)`.
+  - Terminal restoration and task cleanup still run on exit, ensuring the TTY is left in a sane state.
 
 ---
 
@@ -479,6 +540,7 @@ The following tables map common Go Bubble Tea APIs to their `bubbletea-rs` equiv
 | Go (bubbletea) | Rust (bubbletea-rs) | Notes |
 |---|---|---|
 | `tea.Quit` | `quit()` | Initiate program shutdown. |
+| `tea.Kill` / `Program.Kill()` | `kill()` / `Program::kill()` | Immediate termination; Rust returns `Err(Error::ProgramKilled)`. |
 | (signal interrupt handling) | `interrupt()` | Rust convenience to signal external interruption; Go typically handles OS signals internally. |
 | `tea.EnterAltScreen` | `enter_alt_screen()` | Switch to alternate screen. |
 | `tea.ExitAltScreen` | `exit_alt_screen()` | Return from alternate screen. |
@@ -1165,7 +1227,7 @@ Tip: use `sequence(vec![...])` if later commands should run only after earlier o
 - WithReportFocus → Rust `enable_report_focus()`/`disable_report_focus()`.
 - WithBracketedPaste → Rust `enable_bracketed_paste()`/`disable_bracketed_paste()`.
 - WithFilter → Rust `.filter(|Msg| -> Option<Msg>)` on `ProgramBuilder` (semantics differ; filters only on `Msg`).
-- WithEnvironment → no direct Rust equivalent (omitted).
+- WithEnvironment → Rust `.with_environment(HashMap<String, String>)` on `ProgramBuilder`.
 
 ---
 

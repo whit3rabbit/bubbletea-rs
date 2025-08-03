@@ -5,12 +5,13 @@ use crate::event::{
     next_timer_id, ClearScreenMsg, DisableBracketedPasteMsg, DisableMouseMsg,
     DisableReportFocusMsg, EnableBracketedPasteMsg, EnableMouseAllMotionMsg,
     EnableMouseCellMotionMsg, EnableReportFocusMsg, EnterAltScreenMsg, ExitAltScreenMsg,
-    HideCursorMsg, InterruptMsg, Msg, PrintMsg, PrintfMsg, QuitMsg, RequestWindowSizeMsg,
+    HideCursorMsg, InterruptMsg, KillMsg, Msg, PrintMsg, PrintfMsg, QuitMsg, RequestWindowSizeMsg,
     ShowCursorMsg, SuspendMsg,
 };
 use std::future::Future;
 use std::pin::Pin;
 use std::process::Command as StdCommand;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::process::Command as TokioCommand;
 use tokio::time::interval;
@@ -49,12 +50,83 @@ impl Batch {
     }
 }
 
+/// Global environment variables to be applied to external process commands.
+///
+/// Set by `Program::new()` from `ProgramConfig.environment` and read by
+/// `exec_process` when spawning commands. If unset, no variables are injected.
+pub static COMMAND_ENV: OnceLock<std::collections::HashMap<String, String>> = OnceLock::new();
+
 /// Creates a command that quits the application.
 ///
 /// This command sends a `QuitMsg` to the program, which will initiate the
 /// shutdown process.
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg, KeyMsg};
+/// use crossterm::event::KeyCode;
+///
+/// struct MyModel;
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         (Self {}, None)
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         // Quit when 'q' is pressed
+///         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
+///             if key_msg.key == KeyCode::Char('q') {
+///                 return Some(command::quit());
+///             }
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         "Press 'q' to quit".to_string()
+///     }
+/// }
+/// ```
 pub fn quit() -> Cmd {
     Box::pin(async { Some(Box::new(QuitMsg) as Msg) })
+}
+
+/// Creates a command that kills the application immediately.
+///
+/// This command sends a `KillMsg` to the program, which will cause the event loop
+/// to terminate as soon as possible with `Error::ProgramKilled`.
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+///
+/// struct MyModel {
+///     has_error: bool,
+/// }
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         (Self { has_error: false }, None)
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         // Force kill on critical error
+///         if self.has_error {
+///             return Some(command::kill());
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         "Running...".to_string()
+///     }
+/// }
+/// ```
+pub fn kill() -> Cmd {
+    Box::pin(async { Some(Box::new(KillMsg) as Msg) })
 }
 
 /// Creates a command that interrupts the application.
@@ -76,7 +148,48 @@ pub fn suspend() -> Cmd {
 /// Creates a command that executes a batch of commands concurrently.
 ///
 /// The commands in the batch will be executed in parallel and all messages
-/// from the commands will be collected and returned as a BatchMsgInternal.
+/// from the commands will be collected and returned. This is useful when
+/// you need to perform multiple independent operations simultaneously.
+///
+/// # Arguments
+///
+/// * `cmds` - A vector of commands to execute concurrently
+///
+/// # Returns
+///
+/// A command that executes all provided commands in parallel
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+/// use std::time::Duration;
+///
+/// struct MyModel;
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         let model = Self {};
+///         // Execute multiple operations concurrently
+///         let cmd = command::batch(vec![
+///             command::window_size(),  // Get window dimensions
+///             command::tick(Duration::from_secs(1), |_| {
+///                 Box::new("InitialTickMsg") as Msg
+///             }),
+///             command::hide_cursor(),  // Hide the cursor
+///         ]);
+///         (model, Some(cmd))
+///     }
+///     
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         "Loading...".to_string()
+///     }
+/// }
+/// ```
 pub fn batch(cmds: Vec<Cmd>) -> Cmd {
     Box::pin(async move {
         use futures::future::join_all;
@@ -94,10 +207,47 @@ pub fn batch(cmds: Vec<Cmd>) -> Cmd {
 
 /// Creates a command that executes a sequence of commands sequentially.
 ///
-/// The commands in the sequence will be executed one after another. If any of
-/// the commands produce a message, the first message received will be returned.
-/// This behavior might be refined in future versions to handle multiple
-/// messages from a sequence.
+/// The commands in the sequence will be executed one after another in order.
+/// All messages produced by the commands will be collected and returned.
+/// This is useful when you need to perform operations that depend on the
+/// completion of previous operations.
+///
+/// # Arguments
+///
+/// * `cmds` - A vector of commands to execute sequentially
+///
+/// # Returns
+///
+/// A command that executes all provided commands in sequence
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+///
+/// struct MyModel;
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         let model = Self {};
+///         // Execute operations in order
+///         let cmd = command::sequence(vec![
+///             command::enter_alt_screen(),     // First, enter alt screen
+///             command::clear_screen(),         // Then clear it
+///             command::hide_cursor(),          // Finally hide the cursor
+///         ]);
+///         (model, Some(cmd))
+///     }
+///     
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         "Ready".to_string()
+///     }
+/// }
+/// ```
 pub fn sequence(cmds: Vec<Cmd>) -> Cmd {
     Box::pin(async move {
         let mut results = Vec::new();
@@ -114,15 +264,64 @@ pub fn sequence(cmds: Vec<Cmd>) -> Cmd {
     })
 }
 
-/// Creates a command that produces a message at a regular interval.
+/// Creates a command that produces a single message after a delay.
 ///
 /// This command will send a message produced by the provided closure `f`
-/// after every `duration`.
+/// after the specified `duration`. Unlike `every()`, this produces only
+/// one message and then completes. It's commonly used for one-shot timers
+/// that can be re-armed in the update method.
+///
+/// Note: Due to tokio's interval implementation, the first tick is consumed
+/// to ensure the message is sent after a full duration, not immediately.
 ///
 /// # Arguments
 ///
-/// * `duration` - The duration between messages.
-/// * `f` - A closure that takes a `Duration` and returns a `Msg`.
+/// * `duration` - The duration to wait before sending the message
+/// * `f` - A closure that takes a `Duration` and returns a `Msg`
+///
+/// # Returns
+///
+/// A command that will produce a single message after the specified duration
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+/// use std::time::Duration;
+///
+/// #[derive(Debug)]
+/// struct TickMsg;
+///
+/// struct MyModel {
+///     counter: u32,
+/// }
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         let model = Self { counter: 0 };
+///         // Start a timer that fires after 1 second
+///         let cmd = command::tick(Duration::from_secs(1), |_| {
+///             Box::new(TickMsg) as Msg
+///         });
+///         (model, Some(cmd))
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         if msg.downcast_ref::<TickMsg>().is_some() {
+///             self.counter += 1;
+///             // Re-arm the timer for another tick
+///             return Some(command::tick(Duration::from_secs(1), |_| {
+///                 Box::new(TickMsg) as Msg
+///             }));
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         format!("Counter: {}", self.counter)
+///     }
+/// }
+/// ```
 pub fn tick<F>(duration: Duration, f: F) -> Cmd
 where
     F: Fn(Duration) -> Msg + Send + 'static,
@@ -137,15 +336,61 @@ where
     })
 }
 
-/// Creates a command that produces a message repeatedly at a regular interval.
+/// Creates a command that produces messages repeatedly at a regular interval.
 ///
 /// This command will continuously send messages produced by the provided closure `f`
-/// after every `duration` until the program exits.
+/// after every `duration` until the program exits or the timer is cancelled.
+/// Unlike `tick()`, this creates a persistent timer that keeps firing.
+///
+/// Warning: Be careful not to call `every()` repeatedly for the same timer,
+/// as this will create multiple concurrent timers that can overwhelm the
+/// event loop. Instead, call it once and use `cancel_timer()` if needed.
 ///
 /// # Arguments
 ///
-/// * `duration` - The duration between messages.
-/// * `f` - A closure that takes a `Duration` and returns a `Msg`.
+/// * `duration` - The duration between messages
+/// * `f` - A closure that takes a `Duration` and returns a `Msg`
+///
+/// # Returns
+///
+/// A command that will produce messages repeatedly at the specified interval
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+/// use std::time::Duration;
+///
+/// #[derive(Debug)]
+/// struct ClockTickMsg;
+///
+/// struct MyModel {
+///     time_elapsed: Duration,
+/// }
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         let model = Self { time_elapsed: Duration::from_secs(0) };
+///         // Start a timer that fires every second
+///         let cmd = command::every(Duration::from_secs(1), |_| {
+///             Box::new(ClockTickMsg) as Msg
+///         });
+///         (model, Some(cmd))
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         if msg.downcast_ref::<ClockTickMsg>().is_some() {
+///             self.time_elapsed += Duration::from_secs(1);
+///             // No need to re-arm - it keeps firing automatically
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         format!("Time elapsed: {:?}", self.time_elapsed)
+///     }
+/// }
+/// ```
 pub fn every<F>(duration: Duration, f: F) -> Cmd
 where
     F: Fn(Duration) -> Msg + Send + 'static,
@@ -163,19 +408,78 @@ where
     })
 }
 
-/// Creates a command that produces a message repeatedly at a regular interval with cancellation support.
+/// Creates a command that produces messages repeatedly at a regular interval with cancellation support.
 ///
 /// This command will continuously send messages produced by the provided closure `f`
 /// after every `duration` until the program exits or the timer is cancelled.
+/// The returned timer ID can be used with `cancel_timer()` to stop the timer.
 ///
 /// # Arguments
 ///
-/// * `duration` - The duration between messages.
-/// * `f` - A closure that takes a `Duration` and returns a `Msg`.
+/// * `duration` - The duration between messages
+/// * `f` - A closure that takes a `Duration` and returns a `Msg`
 ///
 /// # Returns
 ///
-/// Returns a tuple containing the command and the timer ID for cancellation.
+/// Returns a tuple containing:
+/// - The command to start the timer
+/// - A timer ID that can be used with `cancel_timer()`
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+/// use std::time::Duration;
+///
+/// #[derive(Debug)]
+/// struct AnimationFrameMsg;
+///
+/// #[derive(Debug)]
+/// struct StartAnimationMsg(u64); // Contains timer ID
+///
+/// struct MyModel {
+///     animation_timer_id: Option<u64>,
+///     is_animating: bool,
+/// }
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         let model = Self {
+///             animation_timer_id: None,
+///             is_animating: false,
+///         };
+///         // Start animation timer and get its ID
+///         let (cmd, timer_id) = command::every_with_id(
+///             Duration::from_millis(16), // ~60 FPS
+///             |_| Box::new(AnimationFrameMsg) as Msg
+///         );
+///         // Send a message with the timer ID so we can store it
+///         let batch = command::batch(vec![
+///             cmd,
+///             Box::pin(async move {
+///                 Some(Box::new(StartAnimationMsg(timer_id)) as Msg)
+///             }),
+///         ]);
+///         (model, Some(batch))
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         if let Some(start_msg) = msg.downcast_ref::<StartAnimationMsg>() {
+///             self.animation_timer_id = Some(start_msg.0);
+///             self.is_animating = true;
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         if self.is_animating {
+///             "Animating...".to_string()
+///         } else {
+///             "Stopped".to_string()
+///         }
+///     }
+/// }
+/// ```
 pub fn every_with_id<F>(duration: Duration, f: F) -> (Cmd, u64)
 where
     F: Fn(Duration) -> Msg + Send + 'static,
@@ -197,19 +501,77 @@ where
 
 /// Creates a command that executes an external process.
 ///
-/// This command spawns an external process and returns a message produced by
-/// the provided closure `f` with the process's output.
+/// This command spawns an external process asynchronously and returns a message
+/// produced by the provided closure with the process's output. The process runs
+/// in the background and doesn't block the UI.
 ///
 /// # Arguments
 ///
-/// * `cmd` - The `std::process::Command` to execute.
-/// * `f` - A closure that takes a `Result<std::process::Output, std::io::Error>`
-///   and returns a `Msg`.
+/// * `cmd` - The `std::process::Command` to execute
+/// * `f` - A closure that processes the command output and returns a `Msg`
+///
+/// # Returns
+///
+/// A command that executes the external process
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+/// use std::process::Command;
+///
+/// #[derive(Debug)]
+/// struct GitStatusMsg(String);
+///
+/// struct MyModel {
+///     git_status: String,
+/// }
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         let model = Self { git_status: String::new() };
+///         // Run git status command
+///         let mut cmd = Command::new("git");
+///         cmd.arg("status").arg("--short");
+///         
+///         let exec_cmd = command::exec_process(cmd, |result| {
+///             match result {
+///                 Ok(output) => {
+///                     let status = String::from_utf8_lossy(&output.stdout).to_string();
+///                     Box::new(GitStatusMsg(status)) as Msg
+///                 }
+///                 Err(e) => {
+///                     Box::new(GitStatusMsg(format!("Error: {}", e))) as Msg
+///                 }
+///             }
+///         });
+///         (model, Some(exec_cmd))
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         if let Some(GitStatusMsg(status)) = msg.downcast_ref::<GitStatusMsg>() {
+///             self.git_status = status.clone();
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         format!("Git status:\n{}", self.git_status)
+///     }
+/// }
+/// ```
 pub fn exec_process<F>(cmd: StdCommand, f: F) -> Cmd
 where
     F: Fn(Result<std::process::Output, std::io::Error>) -> Msg + Send + 'static,
 {
     Box::pin(async move {
+        // Apply configured environment variables, if any
+        let mut cmd = cmd;
+        if let Some(env) = crate::command::COMMAND_ENV.get() {
+            for (k, v) in env.iter() {
+                cmd.env(k, v);
+            }
+        }
         let output = TokioCommand::from(cmd).output().await;
         Some(f(output))
     })
@@ -218,7 +580,37 @@ where
 /// Creates a command that enters the alternate screen buffer.
 ///
 /// This command sends an `EnterAltScreenMsg` to the program, which will cause
-/// the terminal to switch to the alternate screen buffer.
+/// the terminal to switch to the alternate screen buffer. The alternate screen
+/// is typically used by full-screen TUI applications to preserve the user's
+/// terminal scrollback.
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+///
+/// struct MyModel;
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         let model = Self {};
+///         // Enter alternate screen on startup
+///         let cmd = command::batch(vec![
+///             command::enter_alt_screen(),
+///             command::hide_cursor(),
+///         ]);
+///         (model, Some(cmd))
+///     }
+///     
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         "TUI Application".to_string()
+///     }
+/// }
+/// ```
 pub fn enter_alt_screen() -> Cmd {
     Box::pin(async { Some(Box::new(EnterAltScreenMsg) as Msg) })
 }
@@ -316,6 +708,38 @@ pub fn clear_screen() -> Cmd {
 ///
 /// This command sends a `RequestWindowSizeMsg` to the program. The terminal
 /// will respond with a `WindowSizeMsg` containing its current dimensions.
+/// This is useful for responsive layouts that adapt to terminal size.
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg, WindowSizeMsg};
+///
+/// struct MyModel {
+///     width: u16,
+///     height: u16,
+/// }
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         let model = Self { width: 0, height: 0 };
+///         // Get initial window size
+///         (model, Some(command::window_size()))
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         if let Some(size_msg) = msg.downcast_ref::<WindowSizeMsg>() {
+///             self.width = size_msg.width;
+///             self.height = size_msg.height;
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         format!("Window size: {}x{}", self.width, self.height)
+///     }
+/// }
+/// ```
 pub fn window_size() -> Cmd {
     Box::pin(async { Some(Box::new(RequestWindowSizeMsg) as Msg) })
 }
@@ -323,7 +747,43 @@ pub fn window_size() -> Cmd {
 /// Creates a command that prints a line to the terminal.
 ///
 /// This command sends a `PrintMsg` to the program, which will print the
-/// provided string to the terminal.
+/// provided string to the terminal. This is useful for debugging or
+/// outputting information that should appear outside the normal UI.
+///
+/// # Arguments
+///
+/// * `s` - The string to print
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+///
+/// struct MyModel {
+///     debug_mode: bool,
+/// }
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         (Self { debug_mode: true }, None)
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         if self.debug_mode {
+///             // Note: In practice, msg doesn't implement Debug by default
+///             // This is just for demonstration
+///             return Some(command::println(
+///                 "Received a message".to_string()
+///             ));
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         "Debug mode active".to_string()
+///     }
+/// }
+/// ```
 pub fn println(s: String) -> Cmd {
     Box::pin(async move { Some(Box::new(PrintMsg(s)) as Msg) })
 }
@@ -339,7 +799,51 @@ pub fn printf(s: String) -> Cmd {
 /// Creates a command that sets the terminal window title.
 ///
 /// This command sends a `SetWindowTitleMsg` to the program, which will update
-/// the terminal window's title.
+/// the terminal window's title. Note that not all terminals support this feature.
+///
+/// # Arguments
+///
+/// * `title` - The new window title
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg};
+///
+/// struct MyModel {
+///     app_name: String,
+///     document_name: Option<String>,
+/// }
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         let model = Self {
+///             app_name: "My App".to_string(),
+///             document_name: None,
+///         };
+///         // Set initial window title
+///         let cmd = command::set_window_title(model.app_name.clone());
+///         (model, Some(cmd))
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         // In a real app, you'd check for document open messages
+///         // Update title when document changes
+///         if let Some(doc_name) = &self.document_name {
+///             let title = format!("{} - {}", doc_name, self.app_name);
+///             return Some(command::set_window_title(title));
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         match &self.document_name {
+///             Some(doc) => format!("Editing: {}", doc),
+///             None => "No document open".to_string(),
+///         }
+///     }
+/// }
+/// ```
 pub fn set_window_title(title: String) -> Cmd {
     Box::pin(async move { Some(Box::new(crate::event::SetWindowTitleMsg(title)) as Msg) })
 }
@@ -347,11 +851,55 @@ pub fn set_window_title(title: String) -> Cmd {
 /// Creates a command that cancels a specific timer.
 ///
 /// This command sends a `CancelTimerMsg` to the program, which will stop
-/// the timer with the given ID.
+/// the timer with the given ID. Use this with timer IDs returned by
+/// `every_with_id()` to stop repeating timers.
 ///
 /// # Arguments
 ///
-/// * `timer_id` - The ID of the timer to cancel.
+/// * `timer_id` - The ID of the timer to cancel
+///
+/// # Returns
+///
+/// A command that cancels the specified timer
+///
+/// # Examples
+///
+/// ```
+/// use bubbletea_rs::{command, Model, Msg, KeyMsg};
+/// use crossterm::event::KeyCode;
+/// use std::time::Duration;
+///
+/// struct MyModel {
+///     timer_id: Option<u64>,
+/// }
+///
+/// impl Model for MyModel {
+///     fn init() -> (Self, Option<command::Cmd>) {
+///         (Self { timer_id: Some(123) }, None)
+///     }
+///
+///     fn update(&mut self, msg: Msg) -> Option<command::Cmd> {
+///         // Cancel timer when user presses 's' for stop
+///         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
+///             if key_msg.key == KeyCode::Char('s') {
+///                 if let Some(id) = self.timer_id {
+///                     self.timer_id = None;
+///                     return Some(command::cancel_timer(id));
+///                 }
+///             }
+///         }
+///         None
+///     }
+///     
+///     fn view(&self) -> String {
+///         if self.timer_id.is_some() {
+///             "Timer running. Press 's' to stop.".to_string()
+///         } else {
+///             "Timer stopped.".to_string()
+///         }
+///     }
+/// }
+/// ```
 pub fn cancel_timer(timer_id: u64) -> Cmd {
     Box::pin(async move { Some(Box::new(crate::event::CancelTimerMsg { timer_id }) as Msg) })
 }

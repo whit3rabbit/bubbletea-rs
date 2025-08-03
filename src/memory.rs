@@ -162,18 +162,26 @@ impl MemoryMonitor {
 /// A snapshot of memory usage metrics at a point in time.
 #[derive(Debug, Clone)]
 pub struct MemorySnapshot {
+    /// Number of currently active timers
     pub active_timers: u64,
+    /// Number of currently active async tasks
     pub active_tasks: u64,
+    /// Current message channel buffer depth
     pub channel_depth: u64,
+    /// Total number of messages processed since startup
     pub messages_processed: u64,
+    /// Peak memory usage recorded in bytes
     pub peak_memory_bytes: u64,
 }
 
 /// Health check result for memory usage.
 #[derive(Debug, Clone)]
 pub struct MemoryHealth {
+    /// Whether the memory usage is within healthy thresholds
     pub is_healthy: bool,
+    /// List of detected issues if any
     pub issues: Vec<String>,
+    /// Current memory usage snapshot
     pub snapshot: MemorySnapshot,
 }
 

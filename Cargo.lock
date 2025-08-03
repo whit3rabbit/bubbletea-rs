@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "bubbletea-rs"
-version = "0.0.1"
+version = "0.0.5"
 dependencies = [
  "anyhow",
  "async-std",
