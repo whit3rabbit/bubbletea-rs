@@ -334,7 +334,7 @@ pub fn gradient_filled_segment(filled_width: usize, ch: char) -> String {
 /// // Pattern 2: Multiple gradient elements with separate buffers
 /// let mut bar_buffer = String::new();
 /// let mut spinner_buffer = String::new();
-/// 
+///
 /// let progress_bar = gradient_filled_segment_with_buffer(15, '█', &mut bar_buffer);
 /// let loading_spinner = gradient_filled_segment_with_buffer(3, '▓', &mut spinner_buffer);
 /// ```

@@ -350,15 +350,15 @@ pub trait TerminalInterface {
 ///
 /// # async fn example() -> Result<(), Error> {
 /// let mut terminal = Terminal::new(None)?;
-/// 
+///
 /// // Set up terminal for TUI mode
 /// terminal.enter_raw_mode().await?;
 /// terminal.enter_alt_screen().await?;
 /// terminal.hide_cursor().await?;
-/// 
+///
 /// // Render some content
 /// terminal.render("Hello, TUI world!").await?;
-/// 
+///
 /// // Clean up (or rely on Drop)
 /// terminal.show_cursor().await?;
 /// terminal.exit_alt_screen().await?;
@@ -637,7 +637,7 @@ impl Drop for Terminal {
 /// # async fn example() -> Result<(), Error> {
 /// // Create with no output (all operations are no-ops)
 /// let mut dummy = DummyTerminal::new(None)?;
-/// 
+///
 /// // These all succeed but do nothing
 /// dummy.enter_raw_mode().await?;
 /// dummy.hide_cursor().await?;

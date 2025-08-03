@@ -105,13 +105,13 @@ async fn test_input_handler_mouse_event() -> Result<(), Error> {
         let mut stream = MockEventStream::new(mock_events);
         while let Some(event_result) = stream.next().await {
             if let Ok(Event::Mouse(mouse_event)) = event_result {
-                    let msg = MouseMsg {
-                        x: mouse_event.column,
-                        y: mouse_event.row,
-                        button: mouse_event.kind,
-                        modifiers: mouse_event.modifiers,
-                    };
-                    let _ = input_handler.event_tx.send(Box::new(msg));
+                let msg = MouseMsg {
+                    x: mouse_event.column,
+                    y: mouse_event.row,
+                    button: mouse_event.kind,
+                    modifiers: mouse_event.modifiers,
+                };
+                let _ = input_handler.event_tx.send(Box::new(msg));
             }
         }
     });
@@ -150,8 +150,8 @@ async fn test_input_handler_resize_event() -> Result<(), Error> {
         let mut stream = MockEventStream::new(mock_events);
         while let Some(event_result) = stream.next().await {
             if let Ok(Event::Resize(width, height)) = event_result {
-                    let msg = WindowSizeMsg { width, height };
-                    let _ = input_handler.event_tx.send(Box::new(msg));
+                let msg = WindowSizeMsg { width, height };
+                let _ = input_handler.event_tx.send(Box::new(msg));
             }
         }
     });

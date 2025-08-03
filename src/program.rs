@@ -397,10 +397,7 @@ impl<M: Model> Program<M> {
     /// - Terminal initialization fails
     /// - Event channel setup fails
     /// - Global state initialization fails
-    fn new(
-        config: ProgramConfig,
-        message_filter: Option<MessageFilter<M>>,
-    ) -> Result<Self, Error> {
+    fn new(config: ProgramConfig, message_filter: Option<MessageFilter<M>>) -> Result<Self, Error> {
         let (event_tx, event_rx) = if let Some(buffer_size) = config.event_channel_buffer {
             let (tx, rx) = mpsc::channel(buffer_size);
             (
@@ -427,8 +424,7 @@ impl<M: Model> Program<M> {
         let _ = crate::event::EVENT_SENDER.set(event_tx.clone());
 
         // Expose command environment globally for exec_process
-        let _ = crate::command::COMMAND_ENV
-            .set(config.environment.clone().unwrap_or_default());
+        let _ = crate::command::COMMAND_ENV.set(config.environment.clone().unwrap_or_default());
 
         let memory_monitor = if config.memory_monitoring {
             Some(crate::memory::MemoryMonitor::new())
