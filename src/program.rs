@@ -56,8 +56,7 @@ pub struct ProgramConfig {
     pub output_writer: Option<Arc<Mutex<dyn AsyncWrite + Send + Unpin>>>,
     /// Optional cancellation token for external control.
     pub cancellation_token: Option<CancellationToken>,
-    /// Optional message filter function.
-    pub message_filter: Option<Box<dyn Fn(Msg) -> Option<Msg> + Send>>,
+    // Message filter is model-aware and stored on Program<M> instead of in ProgramConfig
     /// Optional custom input source.
     pub input_source: Option<InputSource>,
     /// The buffer size for the event channel (None for unbounded, Some(size) for bounded).
@@ -100,10 +99,9 @@ impl Default for ProgramConfig {
             bracketed_paste: false,
             output_writer: None,
             cancellation_token: None,
-            message_filter: None,
             input_source: None,
             event_channel_buffer: Some(1000), // Default to bounded channel with 1000 message buffer
-            memory_monitoring: false, // Disabled by default
+            memory_monitoring: false,         // Disabled by default
         }
     }
 }
@@ -115,6 +113,8 @@ impl Default for ProgramConfig {
 pub struct ProgramBuilder<M: Model> {
     config: ProgramConfig,
     _phantom: PhantomData<M>,
+    /// Optional model-aware message filter
+    message_filter: Option<Box<dyn Fn(&M, Msg) -> Option<Msg> + Send>>,
 }
 
 impl<M: Model> ProgramBuilder<M> {
@@ -123,6 +123,7 @@ impl<M: Model> ProgramBuilder<M> {
         Self {
             config: ProgramConfig::default(),
             _phantom: PhantomData,
+            message_filter: None,
         }
     }
 
@@ -242,16 +243,16 @@ impl<M: Model> ProgramBuilder<M> {
         self
     }
 
-    /// Sets a message filter function.
+    /// Sets a model-aware message filter function.
     ///
-    /// The provided closure will be called for each incoming message, allowing
-    /// for message transformation or filtering.
+    /// The provided closure will be called for each incoming message with access
+    /// to the current model, allowing for context-aware transformation or filtering.
     ///
     /// # Arguments
     ///
-    /// * `f` - A closure that takes a `Msg` and returns an `Option<Msg>`.
-    pub fn filter(mut self, f: impl Fn(Msg) -> Option<Msg> + Send + 'static) -> Self {
-        self.config.message_filter = Some(Box::new(f));
+    /// * `f` - A closure that takes `&M` and `Msg`, returning an `Option<Msg>`.
+    pub fn filter(mut self, f: impl Fn(&M, Msg) -> Option<Msg> + Send + 'static) -> Self {
+        self.message_filter = Some(Box::new(f));
         self
     }
 
@@ -284,7 +285,7 @@ impl<M: Model> ProgramBuilder<M> {
     ///
     /// A `Result` containing the `Program` instance or an `Error` if building fails.
     pub fn build(self) -> Result<Program<M>, Error> {
-        Program::new(self.config)
+        Program::new(self.config, self.message_filter)
     }
 }
 
@@ -306,6 +307,8 @@ pub struct Program<M: Model> {
     shutdown_token: CancellationToken,
     /// Memory usage monitor (optional)
     memory_monitor: Option<crate::memory::MemoryMonitor>,
+    /// Optional model-aware message filter
+    message_filter: Option<Box<dyn Fn(&M, Msg) -> Option<Msg> + Send>>,
     _phantom: PhantomData<M>,
 }
 
@@ -320,17 +323,27 @@ impl<M: Model> Program<M> {
     /// # Arguments
     ///
     /// * `config` - The `ProgramConfig` to use for this program.
+    /// * `message_filter` - The model-aware message filter.
     ///
     /// # Returns
     ///
     /// A `Result` containing the `Program` instance or an `Error` if initialization fails.
-    fn new(config: ProgramConfig) -> Result<Self, Error> {
+    fn new(
+        config: ProgramConfig,
+        message_filter: Option<Box<dyn Fn(&M, Msg) -> Option<Msg> + Send>>,
+    ) -> Result<Self, Error> {
         let (event_tx, event_rx) = if let Some(buffer_size) = config.event_channel_buffer {
             let (tx, rx) = mpsc::channel(buffer_size);
-            (crate::event::EventSender::Bounded(tx), crate::event::EventReceiver::Bounded(rx))
+            (
+                crate::event::EventSender::Bounded(tx),
+                crate::event::EventReceiver::Bounded(rx),
+            )
         } else {
             let (tx, rx) = mpsc::unbounded_channel();
-            (crate::event::EventSender::Unbounded(tx), crate::event::EventReceiver::Unbounded(rx))
+            (
+                crate::event::EventSender::Unbounded(tx),
+                crate::event::EventReceiver::Unbounded(rx),
+            )
         };
 
         let terminal = if config.without_renderer {
@@ -359,6 +372,7 @@ impl<M: Model> Program<M> {
             task_set: JoinSet::new(),
             shutdown_token: CancellationToken::new(),
             memory_monitor,
+            message_filter,
             _phantom: PhantomData,
         })
     }
@@ -427,12 +441,12 @@ impl<M: Model> Program<M> {
                 InputHandler::new(self.event_tx.clone())
             };
             let shutdown_token = self.shutdown_token.clone();
-            
+
             // Update memory monitoring
             if let Some(ref monitor) = self.memory_monitor {
                 monitor.task_spawned();
             }
-            
+
             self.task_set.spawn(async move {
                 tokio::select! {
                     _ = shutdown_token.cancelled() => {
@@ -449,12 +463,12 @@ impl<M: Model> Program<M> {
             if let Some(c) = cmd.take() {
                 let event_tx = self.event_tx.clone();
                 let shutdown_token = self.shutdown_token.clone();
-                
+
                 // Update memory monitoring
                 if let Some(ref monitor) = self.memory_monitor {
                     monitor.task_spawned();
                 }
-                
+
                 self.task_set.spawn(async move {
                     tokio::select! {
                         _ = shutdown_token.cancelled() => {
@@ -475,8 +489,8 @@ impl<M: Model> Program<M> {
                 }
                 event = self.event_rx.recv().fuse() => {
                     if let Some(mut msg) = event {
-                        if let Some(filter_fn) = &self.config.message_filter {
-                            if let Some(filtered_msg) = filter_fn(msg) {
+                        if let Some(filter_fn) = &self.message_filter {
+                            if let Some(filtered_msg) = filter_fn(&model, msg) {
                                 msg = filtered_msg;
                             } else {
                                 continue; // Message was filtered out
@@ -512,7 +526,7 @@ impl<M: Model> Program<M> {
 
                                 // Store the cancellation token for this timer
                                 self.active_timers.insert(timer_id, cancellation_token.clone());
-                                
+
                                 // Update memory monitoring
                                 if let Some(ref monitor) = self.memory_monitor {
                                     monitor.timer_added();
@@ -586,7 +600,7 @@ impl<M: Model> Program<M> {
                             if is_quit {
                                 should_quit = true;
                             }
-                            
+
                             // Update memory monitoring
                             if let Some(ref monitor) = self.memory_monitor {
                                 monitor.message_processed();
@@ -636,20 +650,21 @@ impl<M: Model> Program<M> {
     async fn cleanup_tasks(&mut self) {
         // Cancel the shutdown token to signal all tasks to stop
         self.shutdown_token.cancel();
-        
+
         // Cancel all active timers
         for (_, token) in self.active_timers.drain() {
             token.cancel();
         }
-        
+
         // Wait for all tasks to complete, with a timeout to avoid hanging
         let timeout = std::time::Duration::from_millis(500);
         let _ = tokio::time::timeout(timeout, async {
             while let Some(_) = self.task_set.join_next().await {
                 // Task completed
             }
-        }).await;
-        
+        })
+        .await;
+
         // Abort any remaining tasks that didn't respond to cancellation
         self.task_set.abort_all();
     }

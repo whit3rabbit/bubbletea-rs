@@ -198,17 +198,17 @@ impl TerminalInterface for Terminal {
 
         if let Some(writer) = &mut self.output_writer {
             use tokio::io::AsyncWriteExt;
-            
+
             // Pre-allocate buffer for efficient rendering
             self.render_buffer.clear();
-            
+
             // Reserve space for the clear sequence plus content
             let estimated_size = 8 + content.len() + content.chars().filter(|&c| c == '\n').count();
             self.render_buffer.reserve(estimated_size);
-            
+
             // Add clear sequence
             self.render_buffer.push_str("\x1b[H\x1b[2J");
-            
+
             // Efficiently replace newlines by iterating through chars
             for ch in content.chars() {
                 if ch == '\n' {
@@ -217,7 +217,7 @@ impl TerminalInterface for Terminal {
                     self.render_buffer.push(ch);
                 }
             }
-            
+
             writer
                 .lock()
                 .await
@@ -231,11 +231,11 @@ impl TerminalInterface for Terminal {
 
             // Pre-allocate buffer for efficient rendering
             self.render_buffer.clear();
-            
+
             // Reserve space for content plus newline replacements
             let estimated_size = content.len() + content.chars().filter(|&c| c == '\n').count();
             self.render_buffer.reserve(estimated_size);
-            
+
             // Efficiently replace newlines by iterating through chars
             for ch in content.chars() {
                 if ch == '\n' {
@@ -244,7 +244,7 @@ impl TerminalInterface for Terminal {
                     self.render_buffer.push(ch);
                 }
             }
-            
+
             print!("{}", self.render_buffer);
             io::stdout().flush()?;
         }

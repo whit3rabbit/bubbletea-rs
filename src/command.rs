@@ -2,10 +2,11 @@
 //! Commands are asynchronous operations that can produce messages to update the model.
 
 use crate::event::{
-    next_timer_id, ClearScreenMsg, DisableBracketedPasteMsg, DisableMouseMsg, DisableReportFocusMsg,
-    EnableBracketedPasteMsg, EnableMouseAllMotionMsg, EnableMouseCellMotionMsg,
-    EnableReportFocusMsg, EnterAltScreenMsg, ExitAltScreenMsg, HideCursorMsg, InterruptMsg, Msg,
-    PrintMsg, PrintfMsg, QuitMsg, RequestWindowSizeMsg, ShowCursorMsg, SuspendMsg,
+    next_timer_id, ClearScreenMsg, DisableBracketedPasteMsg, DisableMouseMsg,
+    DisableReportFocusMsg, EnableBracketedPasteMsg, EnableMouseAllMotionMsg,
+    EnableMouseCellMotionMsg, EnableReportFocusMsg, EnterAltScreenMsg, ExitAltScreenMsg,
+    HideCursorMsg, InterruptMsg, Msg, PrintMsg, PrintfMsg, QuitMsg, RequestWindowSizeMsg,
+    ShowCursorMsg, SuspendMsg,
 };
 use std::future::Future;
 use std::pin::Pin;
@@ -151,7 +152,7 @@ where
 {
     let timer_id = next_timer_id();
     let cancellation_token = CancellationToken::new();
-    
+
     Box::pin(async move {
         Some(Box::new(crate::event::EveryMsgInternal {
             duration,
@@ -181,7 +182,7 @@ where
 {
     let timer_id = next_timer_id();
     let cancellation_token = CancellationToken::new();
-    
+
     let cmd = Box::pin(async move {
         Some(Box::new(crate::event::EveryMsgInternal {
             duration,
@@ -190,7 +191,7 @@ where
             timer_id,
         }) as Msg)
     });
-    
+
     (cmd, timer_id)
 }
 

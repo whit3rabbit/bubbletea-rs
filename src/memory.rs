@@ -96,7 +96,8 @@ impl MemoryMonitor {
             if bytes <= current {
                 break;
             }
-            if self.peak_memory_bytes
+            if self
+                .peak_memory_bytes
                 .compare_exchange_weak(current, bytes, Ordering::Relaxed, Ordering::Relaxed)
                 .is_ok()
             {
@@ -182,7 +183,7 @@ impl std::fmt::Display for MemorySnapshot {
             f,
             "Memory Snapshot - Timers: {}, Tasks: {}, Channel: {}, Messages: {}, Peak Memory: {} bytes",
             self.active_timers,
-            self.active_tasks, 
+            self.active_tasks,
             self.channel_depth,
             self.messages_processed,
             self.peak_memory_bytes
@@ -195,8 +196,12 @@ impl std::fmt::Display for MemoryHealth {
         if self.is_healthy {
             write!(f, "Memory Health: HEALTHY\n{}", self.snapshot)
         } else {
-            write!(f, "Memory Health: ISSUES DETECTED\nIssues: {}\n{}", 
-                   self.issues.join(", "), self.snapshot)
+            write!(
+                f,
+                "Memory Health: ISSUES DETECTED\nIssues: {}\n{}",
+                self.issues.join(", "),
+                self.snapshot
+            )
         }
     }
 }
@@ -208,19 +213,19 @@ mod tests {
     #[test]
     fn test_memory_monitor_basic() {
         let monitor = MemoryMonitor::new();
-        
+
         assert_eq!(monitor.get_active_timers(), 0);
         assert_eq!(monitor.get_active_tasks(), 0);
-        
+
         monitor.timer_added();
         monitor.task_spawned();
-        
+
         assert_eq!(monitor.get_active_timers(), 1);
         assert_eq!(monitor.get_active_tasks(), 1);
-        
+
         monitor.timer_removed();
         monitor.task_completed();
-        
+
         assert_eq!(monitor.get_active_timers(), 0);
         assert_eq!(monitor.get_active_tasks(), 0);
     }
@@ -228,16 +233,16 @@ mod tests {
     #[test]
     fn test_memory_health_check() {
         let monitor = MemoryMonitor::new();
-        
+
         // Initially healthy
         let health = monitor.check_health();
         assert!(health.is_healthy);
-        
+
         // Add many timers to trigger warning
         for _ in 0..150 {
             monitor.timer_added();
         }
-        
+
         let health = monitor.check_health();
         assert!(!health.is_healthy);
         assert!(!health.issues.is_empty());
@@ -246,13 +251,13 @@ mod tests {
     #[test]
     fn test_peak_memory_tracking() {
         let monitor = MemoryMonitor::new();
-        
+
         monitor.update_peak_memory(1000);
         assert_eq!(monitor.get_peak_memory_bytes(), 1000);
-        
+
         monitor.update_peak_memory(500); // Should not update
         assert_eq!(monitor.get_peak_memory_bytes(), 1000);
-        
+
         monitor.update_peak_memory(2000); // Should update
         assert_eq!(monitor.get_peak_memory_bytes(), 2000);
     }

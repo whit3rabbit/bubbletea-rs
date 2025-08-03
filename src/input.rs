@@ -131,8 +131,11 @@ impl InputHandler {
                         break;
                     }
                 }
-                Ok(Event::Paste(_)) => {
-                    continue;
+                Ok(Event::Paste(pasted_text)) => {
+                    let msg = crate::event::PasteMsg(pasted_text);
+                    if event_tx.send(Box::new(msg)).is_err() {
+                        break;
+                    }
                 }
                 Err(e) => {
                     return Err(Error::Io(e));

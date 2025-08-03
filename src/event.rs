@@ -27,9 +27,7 @@ impl EventSender {
     pub fn send(&self, msg: Msg) -> Result<(), crate::Error> {
         match self {
             // Unbounded send fails only when the receiver is closed.
-            EventSender::Unbounded(tx) => tx
-                .send(msg)
-                .map_err(|_| crate::Error::ChannelClosed),
+            EventSender::Unbounded(tx) => tx.send(msg).map_err(|_| crate::Error::ChannelClosed),
             // Bounded send can fail due to Full (backpressure) or Closed.
             EventSender::Bounded(tx) => tx.try_send(msg).map_err(Into::into),
         }
@@ -115,6 +113,10 @@ pub struct MouseMsg {
     /// The `crossterm::event::KeyModifiers` active during the mouse event.
     pub modifiers: crossterm::event::KeyModifiers,
 }
+
+/// A message indicating that text was pasted into the terminal (bracketed paste).
+#[derive(Debug, Clone)]
+pub struct PasteMsg(pub String);
 
 /// A message indicating a change in the terminal window size.
 #[derive(Debug, Clone)]
