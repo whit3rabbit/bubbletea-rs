@@ -950,7 +950,7 @@ impl<M: Model> Program<M> {
     pub async fn println(&mut self, s: String) -> Result<(), Error> {
         if let Some(_terminal) = &mut self.terminal {
             use std::io::Write;
-            println!("{}", s);
+            println!("{s}");
             std::io::stdout().flush()?;
         }
         Ok(())
@@ -982,7 +982,7 @@ impl<M: Model> Program<M> {
     pub async fn printf(&mut self, s: String) -> Result<(), Error> {
         if let Some(_terminal) = &mut self.terminal {
             use std::io::Write;
-            print!("{}", s);
+            print!("{s}");
             std::io::stdout().flush()?;
         }
         Ok(())

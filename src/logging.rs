@@ -87,7 +87,7 @@ pub fn log_to_file(path: impl AsRef<Path>, prefix: &str) -> Result<(), Error> {
         .append(true)
         .open(path.as_ref())?;
 
-    log::info!("Logging initialized with prefix: {}", prefix);
+    log::info!("Logging initialized with prefix: {prefix}");
 
     Ok(())
 }
