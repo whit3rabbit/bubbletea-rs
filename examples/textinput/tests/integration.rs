@@ -1,14 +1,14 @@
-use bubbletea_rs::{Model, Msg, KeyMsg};
+use bubbletea_rs::{KeyMsg, Model, Msg};
 use crossterm::event::{KeyCode, KeyModifiers};
 
 #[path = "../main.rs"]
 mod textinput_main;
-use textinput_main::{TextInputModel, BlinkMsg};
+use textinput_main::{BlinkMsg, TextInputModel};
 
 #[test]
 fn test_textinput_model_init() {
     let (model, cmd) = TextInputModel::init();
-    
+
     // Should start with empty input
     assert!(model.input.is_empty());
     assert_eq!(model.cursor_pos, 0);
@@ -18,7 +18,7 @@ fn test_textinput_model_init() {
     assert!(model.focused);
     assert!(model.show_cursor);
     assert!(model.error.is_none());
-    
+
     // Should return a command for cursor blinking
     assert!(cmd.is_some());
 }
@@ -27,7 +27,7 @@ fn test_textinput_model_init() {
 fn test_initial_view() {
     let (model, _) = TextInputModel::init();
     let view = model.view();
-    
+
     // Should show placeholder and prompt
     assert!(view.contains("What's your favorite Pokémon?"));
     assert!(view.contains("Pikachu"));
@@ -47,14 +47,14 @@ fn test_character_input() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Char('P'),
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Character should be inserted
     assert_eq!(model.input, "P");
     assert_eq!(model.cursor_pos, 1);
@@ -74,18 +74,18 @@ fn test_multiple_character_input() {
         show_cursor: true,
         error: None,
     };
-    
+
     let chars = ['P', 'i', 'k', 'a', 'c', 'h', 'u'];
-    
+
     for c in chars {
         let key_msg = Box::new(KeyMsg {
             key: KeyCode::Char(c),
             modifiers: KeyModifiers::NONE,
         }) as Msg;
-        
+
         model.update(key_msg);
     }
-    
+
     // Should spell "Pikachu"
     assert_eq!(model.input, "Pikachu");
     assert_eq!(model.cursor_pos, 7);
@@ -103,14 +103,14 @@ fn test_backspace() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Backspace,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should remove last character
     assert_eq!(model.input, "Pikach");
     assert_eq!(model.cursor_pos, 6);
@@ -130,14 +130,14 @@ fn test_backspace_at_beginning() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Backspace,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should not change anything
     assert_eq!(model.input, "Pikachu");
     assert_eq!(model.cursor_pos, 0);
@@ -156,14 +156,14 @@ fn test_delete() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Delete,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should remove character at cursor position
     assert_eq!(model.input, "Pikchu");
     assert_eq!(model.cursor_pos, 3);
@@ -183,14 +183,14 @@ fn test_delete_at_end() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Delete,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should not change anything
     assert_eq!(model.input, "Pikachu");
     assert_eq!(model.cursor_pos, 7);
@@ -209,14 +209,14 @@ fn test_cursor_left() {
         show_cursor: false,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Left,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should move cursor left
     assert_eq!(model.cursor_pos, 6);
     assert!(model.show_cursor); // Should show cursor when moving
@@ -235,14 +235,14 @@ fn test_cursor_left_at_beginning() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Left,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should not move cursor
     assert_eq!(model.cursor_pos, 0);
     assert!(cmd.is_none());
@@ -260,14 +260,14 @@ fn test_cursor_right() {
         show_cursor: false,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Right,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should move cursor right
     assert_eq!(model.cursor_pos, 4);
     assert!(model.show_cursor); // Should show cursor when moving
@@ -286,14 +286,14 @@ fn test_cursor_right_at_end() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Right,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should not move cursor
     assert_eq!(model.cursor_pos, 7);
     assert!(cmd.is_none());
@@ -311,14 +311,14 @@ fn test_home_key() {
         show_cursor: false,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Home,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should move cursor to beginning
     assert_eq!(model.cursor_pos, 0);
     assert!(model.show_cursor);
@@ -337,14 +337,14 @@ fn test_end_key() {
         show_cursor: false,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::End,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should move cursor to end
     assert_eq!(model.cursor_pos, 7);
     assert!(model.show_cursor);
@@ -363,14 +363,14 @@ fn test_character_limit() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Char('z'),
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should not add character if at limit
     assert_eq!(model.input.len(), 156);
     assert_eq!(model.cursor_pos, 156);
@@ -389,14 +389,14 @@ fn test_insert_character_middle() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Char('k'),
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should insert 'k' at cursor position
     assert_eq!(model.input, "Pikchu");
     assert_eq!(model.cursor_pos, 3);
@@ -415,14 +415,14 @@ fn test_enter_key_quits() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Enter,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should return quit command
     assert!(cmd.is_some());
 }
@@ -439,14 +439,14 @@ fn test_esc_key_quits() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Esc,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should return quit command
     assert!(cmd.is_some());
 }
@@ -463,14 +463,14 @@ fn test_ctrl_c_quits() {
         show_cursor: true,
         error: None,
     };
-    
+
     let key_msg = Box::new(KeyMsg {
         key: KeyCode::Char('c'),
         modifiers: KeyModifiers::CONTROL,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should return quit command
     assert!(cmd.is_some());
 }
@@ -487,10 +487,10 @@ fn test_blink_message() {
         show_cursor: true,
         error: None,
     };
-    
+
     let blink_msg = Box::new(BlinkMsg) as Msg;
     let cmd = model.update(blink_msg);
-    
+
     // Should toggle cursor visibility
     assert!(!model.show_cursor);
     assert!(cmd.is_some()); // Should return another blink command
@@ -508,9 +508,9 @@ fn test_view_with_cursor() {
         show_cursor: true,
         error: None,
     };
-    
+
     let view = model.view();
-    
+
     // Should show input with cursor at end
     assert!(view.contains("What's your favorite Pokémon?"));
     assert!(view.contains("Pika│"));
@@ -529,9 +529,9 @@ fn test_view_cursor_in_middle() {
         show_cursor: true,
         error: None,
     };
-    
+
     let view = model.view();
-    
+
     // Should show cursor in middle of text
     assert!(view.contains("Pik│achu"));
 }
@@ -548,9 +548,9 @@ fn test_view_without_cursor() {
         show_cursor: false, // Cursor hidden
         error: None,
     };
-    
+
     let view = model.view();
-    
+
     // Should show input without cursor
     assert!(view.contains("Pikachu"));
     assert!(!view.contains("│"));
@@ -568,9 +568,9 @@ fn test_view_empty_input_with_placeholder() {
         show_cursor: true,
         error: None,
     };
-    
+
     let view = model.view();
-    
+
     // Should show placeholder with cursor
     assert!(view.contains("│Pikachu"));
 }

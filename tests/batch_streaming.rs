@@ -24,20 +24,31 @@ async fn batch_streams_messages_as_ready() {
     // The batch should complete within a reasonable time (longer than slow command)
     let res = tokio::time::timeout(Duration::from_millis(500), batch_cmd).await;
     assert!(res.is_ok(), "batch() did not complete in time");
-    
+
     let batch_result = res.unwrap();
-    assert!(batch_result.is_some(), "batch() should return a BatchMsgInternal");
-    
+    assert!(
+        batch_result.is_some(),
+        "batch() should return a BatchMsgInternal"
+    );
+
     let batch_msg = batch_result.unwrap();
-    let batch_internal = batch_msg.downcast_ref::<BatchMsgInternal>().expect("should be BatchMsgInternal");
-    
+    let batch_internal = batch_msg
+        .downcast_ref::<BatchMsgInternal>()
+        .expect("should be BatchMsgInternal");
+
     // Should contain both messages
     assert_eq!(batch_internal.messages.len(), 2);
-    
+
     // Should contain both FastMsg and SlowMsg (order may vary due to concurrent execution)
-    let has_fast = batch_internal.messages.iter().any(|msg| is_type::<FastMsg>(msg));
-    let has_slow = batch_internal.messages.iter().any(|msg| is_type::<SlowMsg>(msg));
-    
+    let has_fast = batch_internal
+        .messages
+        .iter()
+        .any(|msg| is_type::<FastMsg>(msg));
+    let has_slow = batch_internal
+        .messages
+        .iter()
+        .any(|msg| is_type::<SlowMsg>(msg));
+
     assert!(has_fast, "batch should contain FastMsg");
     assert!(has_slow, "batch should contain SlowMsg");
 }

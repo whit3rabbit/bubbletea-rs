@@ -6,12 +6,11 @@
 //! It is responsible for reading terminal events and converting them into messages
 //! that can be processed by the application's model.
 
-use crate::{Error, KeyMsg, MouseMsg, Msg, WindowSizeMsg};
+use crate::{Error, KeyMsg, MouseMsg, WindowSizeMsg};
 use crossterm::event::{Event, EventStream, KeyCode, KeyModifiers};
 use futures::StreamExt;
 use std::pin::Pin;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
-use tokio::sync::mpsc;
 
 /// Represents different input sources that the `InputHandler` can read from.
 ///
@@ -34,9 +33,9 @@ pub enum InputSource {
 /// It continuously reads events from the `crossterm` event stream and converts
 /// them into appropriate `Msg` types.
 pub struct InputHandler {
-    /// The sender half of an unbounded MPSC channel used to send messages
+    /// The sender half of an MPSC channel used to send messages
     /// to the `Program`'s event loop.
-    pub event_tx: mpsc::UnboundedSender<Msg>,
+    pub event_tx: crate::event::EventSender,
 
     /// The input source to read from.
     pub input_source: InputSource,
@@ -47,10 +46,13 @@ impl InputHandler {
     ///
     /// # Arguments
     ///
-    /// * `event_tx` - An `mpsc::UnboundedSender<Msg>` to send processed events.
-    pub fn new(event_tx: mpsc::UnboundedSender<Msg>) -> Self {
+    /// * `event_tx` - An `EventSender` to send processed events.
+    pub fn new<T>(event_tx: T) -> Self
+    where
+        T: Into<crate::event::EventSender>,
+    {
         Self {
-            event_tx,
+            event_tx: event_tx.into(),
             input_source: InputSource::Terminal,
         }
     }
@@ -59,11 +61,14 @@ impl InputHandler {
     ///
     /// # Arguments
     ///
-    /// * `event_tx` - An `mpsc::UnboundedSender<Msg>` to send processed events.
+    /// * `event_tx` - An `EventSender` to send processed events.
     /// * `input_source` - The `InputSource` to read from.
-    pub fn with_source(event_tx: mpsc::UnboundedSender<Msg>, input_source: InputSource) -> Self {
+    pub fn with_source<T>(event_tx: T, input_source: InputSource) -> Self
+    where
+        T: Into<crate::event::EventSender>,
+    {
         Self {
-            event_tx,
+            event_tx: event_tx.into(),
             input_source,
         }
     }
@@ -83,7 +88,7 @@ impl InputHandler {
     }
 
     /// Runs the terminal input handler using crossterm's event stream.
-    async fn run_terminal_input(event_tx: mpsc::UnboundedSender<Msg>) -> Result<(), Error> {
+    async fn run_terminal_input(event_tx: crate::event::EventSender) -> Result<(), Error> {
         let mut event_stream = EventStream::new();
 
         while let Some(event) = event_stream.next().await {
@@ -144,7 +149,7 @@ impl InputHandler {
     /// each line into a KeyMsg with the line content as individual characters.
     /// This is a simplified approach for demonstration purposes.
     async fn run_custom_input(
-        event_tx: mpsc::UnboundedSender<Msg>,
+        event_tx: crate::event::EventSender,
         reader: Pin<Box<dyn AsyncRead + Send + Unpin>>,
     ) -> Result<(), Error> {
         let mut buf_reader = BufReader::new(reader);

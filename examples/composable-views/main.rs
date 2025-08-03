@@ -213,39 +213,47 @@ impl MainModel {
         // Currently implementing manual borders
         let border_color = if focused {
             // TODO: lipgloss Color("69") - using blue for now
-            crossterm::style::Color::Rgb { r: 105, g: 105, b: 255 }
+            crossterm::style::Color::Rgb {
+                r: 105,
+                g: 105,
+                b: 255,
+            }
         } else {
             crossterm::style::Color::Reset
         };
 
         let mut result = String::new();
-        
+
         // Calculate padding for centering content
         let content_lines: Vec<&str> = content.lines().collect();
         let content_height = content_lines.len();
         let vertical_padding = (height.saturating_sub(content_height + 2)) / 2;
-        
+
         if focused {
             // Draw top border
-            result.push_str(&style(format!("┌{}┐", "─".repeat(width - 2)))
-                .with(border_color)
-                .to_string());
+            result.push_str(
+                &style(format!("┌{}┐", "─".repeat(width - 2)))
+                    .with(border_color)
+                    .to_string(),
+            );
             result.push('\n');
-            
+
             // Add top padding
             for _ in 0..vertical_padding {
-                result.push_str(&style(format!("│{}│", " ".repeat(width - 2)))
-                    .with(border_color)
-                    .to_string());
+                result.push_str(
+                    &style(format!("│{}│", " ".repeat(width - 2)))
+                        .with(border_color)
+                        .to_string(),
+                );
                 result.push('\n');
             }
-            
+
             // Draw content with borders
             for line in content_lines {
                 let content_width = line.chars().count();
                 let left_padding = (width.saturating_sub(content_width + 2)) / 2;
                 let right_padding = width.saturating_sub(content_width + left_padding + 2);
-                
+
                 result.push_str(&style("│").with(border_color).to_string());
                 result.push_str(&" ".repeat(left_padding));
                 result.push_str(line);
@@ -253,19 +261,23 @@ impl MainModel {
                 result.push_str(&style("│").with(border_color).to_string());
                 result.push('\n');
             }
-            
+
             // Add bottom padding
             for _ in 0..(height.saturating_sub(content_height + vertical_padding + 2)) {
-                result.push_str(&style(format!("│{}│", " ".repeat(width - 2)))
-                    .with(border_color)
-                    .to_string());
+                result.push_str(
+                    &style(format!("│{}│", " ".repeat(width - 2)))
+                        .with(border_color)
+                        .to_string(),
+                );
                 result.push('\n');
             }
-            
+
             // Draw bottom border
-            result.push_str(&style(format!("└{}┘", "─".repeat(width - 2)))
-                .with(border_color)
-                .to_string());
+            result.push_str(
+                &style(format!("└{}┘", "─".repeat(width - 2)))
+                    .with(border_color)
+                    .to_string(),
+            );
         } else {
             // No border for unfocused view
             // Add top padding
@@ -273,26 +285,26 @@ impl MainModel {
                 result.push_str(&" ".repeat(width));
                 result.push('\n');
             }
-            
+
             // Draw content centered
             for line in content_lines {
                 let content_width = line.chars().count();
                 let left_padding = (width.saturating_sub(content_width)) / 2;
                 let right_padding = width.saturating_sub(content_width + left_padding);
-                
+
                 result.push_str(&" ".repeat(left_padding));
                 result.push_str(line);
                 result.push_str(&" ".repeat(right_padding));
                 result.push('\n');
             }
-            
+
             // Add bottom padding
             for _ in 0..(height.saturating_sub(content_height + vertical_padding)) {
                 result.push_str(&" ".repeat(width));
                 result.push('\n');
             }
         }
-        
+
         result
     }
 
@@ -301,7 +313,7 @@ impl MainModel {
         let left_lines: Vec<&str> = left.lines().collect();
         let right_lines: Vec<&str> = right.lines().collect();
         let max_lines = left_lines.len().max(right_lines.len());
-        
+
         let mut result = String::new();
         for i in 0..max_lines {
             if i < left_lines.len() {
@@ -309,16 +321,16 @@ impl MainModel {
             } else {
                 result.push_str(&" ".repeat(15)); // Width of the box
             }
-            
+
             if i < right_lines.len() {
                 result.push_str(right_lines[i]);
             }
-            
+
             if i < max_lines - 1 {
                 result.push('\n');
             }
         }
-        
+
         result
     }
 }
@@ -329,10 +341,9 @@ impl Model for MainModel {
         // Don't start timer yet; start spinner independently to avoid batch gating
         model.timer.last_tick = None;
 
-        let spinner_cmd = tick(
-            model.spinner.spinner_type.interval(),
-            |_| Box::new(SpinnerTickMsg) as Msg,
-        );
+        let spinner_cmd = tick(model.spinner.spinner_type.interval(), |_| {
+            Box::new(SpinnerTickMsg) as Msg
+        });
 
         (model, Some(spinner_cmd))
     }
@@ -363,17 +374,18 @@ impl Model for MainModel {
                             // Reset timer
                             self.timer.reset();
                             // Ensure timer ticking resumes after reset
-                            cmds.push(tick(Duration::from_secs(1), |_| Box::new(TimerTickMsg) as Msg));
+                            cmds.push(tick(Duration::from_secs(1), |_| {
+                                Box::new(TimerTickMsg) as Msg
+                            }));
                             self.timer_started = true;
                         }
                         SessionState::SpinnerView => {
                             // Next spinner style
                             self.spinner.next_spinner();
                             // Continue spinner ticking with the new interval
-                            cmds.push(tick(
-                                self.spinner.spinner_type.interval(),
-                                |_| Box::new(SpinnerTickMsg) as Msg,
-                            ));
+                            cmds.push(tick(self.spinner.spinner_type.interval(), |_| {
+                                Box::new(SpinnerTickMsg) as Msg
+                            }));
                         }
                     }
                 }
@@ -386,7 +398,9 @@ impl Model for MainModel {
             if !self.timer.is_done() {
                 self.timer.tick();
                 // Schedule next timer tick (one-shot)
-                cmds.push(tick(Duration::from_secs(1), |_| Box::new(TimerTickMsg) as Msg));
+                cmds.push(tick(Duration::from_secs(1), |_| {
+                    Box::new(TimerTickMsg) as Msg
+                }));
                 self.timer_started = true;
             }
         }
@@ -396,14 +410,15 @@ impl Model for MainModel {
             self.spinner.tick();
             // Kick off timer ticking the first time we see spinner progress
             if !self.timer_started {
-                cmds.push(tick(Duration::from_secs(1), |_| Box::new(TimerTickMsg) as Msg));
+                cmds.push(tick(Duration::from_secs(1), |_| {
+                    Box::new(TimerTickMsg) as Msg
+                }));
                 self.timer_started = true;
             }
             // Schedule next spinner tick (one-shot) with current interval
-            cmds.push(tick(
-                self.spinner.spinner_type.interval(),
-                |_| Box::new(SpinnerTickMsg) as Msg,
-            ));
+            cmds.push(tick(self.spinner.spinner_type.interval(), |_| {
+                Box::new(SpinnerTickMsg) as Msg
+            }));
         }
 
         if cmds.is_empty() {
@@ -420,18 +435,18 @@ impl Model for MainModel {
             5,
             self.state == SessionState::TimerView,
         );
-        
+
         let spinner_view = self.render_view(
             &self.spinner.view(),
             15,
             5,
             self.state == SessionState::SpinnerView,
         );
-        
+
         let mut result = String::new();
         result.push_str(&self.join_horizontal(&timer_view, &spinner_view));
         result.push('\n');
-        
+
         // Help text
         // TODO: Apply lipgloss helpStyle with Color("241")
         let help = format!(
@@ -440,7 +455,7 @@ impl Model for MainModel {
         );
         result.push_str(&style(help).dark_grey().to_string());
         result.push('\n');
-        
+
         result
     }
 }

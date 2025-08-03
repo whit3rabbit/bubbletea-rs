@@ -101,12 +101,15 @@ impl Model for AltScreenModel {
         //   - keywordStyle: fg=204, bg=235 for the " altscreen mode "/" inline mode " label
         //   - helpStyle:    fg=241 for the help line
         // For now we keep plain text to avoid adding ad-hoc ANSI styling.
-        let mode = if self.altscreen { " altscreen mode " } else { " inline mode " };
+        let mode = if self.altscreen {
+            " altscreen mode "
+        } else {
+            " inline mode "
+        };
 
         format!(
             "\n\n  You're in {}\n\n\n{}\n",
-            mode,
-            "  space: switch modes • ctrl-z: suspend • q: exit"
+            mode, "  space: switch modes • ctrl-z: suspend • q: exit"
         )
     }
 }

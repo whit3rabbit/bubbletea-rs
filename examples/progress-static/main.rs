@@ -15,8 +15,8 @@
 //! maintaining the same behavior: increment by 25% every second, quit on
 //! any key press, and automatically quit when reaching 100%.
 
-use bubbletea_rs::{quit, tick, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
 use bubbletea_rs::gradient::gradient_filled_segment;
+use bubbletea_rs::{quit, tick, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
 use std::time::Duration;
 
 /// Message for progress tick updates
@@ -39,7 +39,7 @@ impl ProgressBar {
             empty_char: '░',
         }
     }
-    
+
     /// Render progress bar with percentage (matching Go's ViewAs method)
     pub fn view_as(&self, percent: f64) -> String {
         let percent = percent.clamp(0.0, 1.0);
@@ -70,12 +70,12 @@ impl ProgressStaticModel {
             progress: ProgressBar::new(),
         }
     }
-    
+
     pub fn update_window_size(&mut self, width: u16, _height: u16) {
         // Match Go behavior: width - padding*2 - 4, max 80
         const PADDING: u16 = 2;
         const MAX_WIDTH: usize = 80;
-        
+
         let available_width = width.saturating_sub(PADDING * 2).saturating_sub(4) as usize;
         self.progress.width = available_width.min(MAX_WIDTH);
     }
@@ -84,7 +84,7 @@ impl ProgressStaticModel {
 impl Model for ProgressStaticModel {
     fn init() -> (Self, Option<Cmd>) {
         let model = ProgressStaticModel::new();
-        
+
         // Start the progress updates (matching Go's tickCmd)
         let cmd = tick(Duration::from_secs(1), |_| Box::new(ProgressTickMsg) as Msg);
         (model, Some(cmd))
@@ -100,9 +100,11 @@ impl Model for ProgressStaticModel {
                 return Some(quit()); // Auto-quit when complete
             }
             // Schedule next progress update
-            return Some(tick(Duration::from_secs(1), |_| Box::new(ProgressTickMsg) as Msg));
+            return Some(tick(Duration::from_secs(1), |_| {
+                Box::new(ProgressTickMsg) as Msg
+            }));
         }
-        
+
         // Handle window size changes
         if let Some(size_msg) = msg.downcast_ref::<WindowSizeMsg>() {
             self.update_window_size(size_msg.width, size_msg.height);
@@ -119,7 +121,7 @@ impl Model for ProgressStaticModel {
 
     fn view(&self) -> String {
         const PADDING: &str = "  "; // 2 spaces padding
-        
+
         format!(
             "\n{}{}\n\n{}Press any key to quit",
             PADDING,
@@ -132,11 +134,10 @@ impl Model for ProgressStaticModel {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create and run the program (matching Go main function behavior)
-    let program = Program::<ProgressStaticModel>::builder()
-        .build()?;
-    
+    let program = Program::<ProgressStaticModel>::builder().build()?;
+
     // Run the program
     program.run().await?;
-    
+
     Ok(())
 }

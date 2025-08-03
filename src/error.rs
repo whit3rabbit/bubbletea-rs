@@ -60,6 +60,14 @@ pub enum Error {
     /// Represents a generic send error, used when a message fails to be sent.
     #[error("Send error")]
     SendError,
+
+    /// Bounded channel is full (backpressure). The message could not be enqueued.
+    #[error("Channel is full")]
+    ChannelFull,
+
+    /// Channel is closed; no receivers (or senders) are available.
+    #[error("Channel is closed")]
+    ChannelClosed,
 }
 
 /// Implements conversion from `tokio::sync::mpsc::error::SendError<T>` to `Error::ChannelSend`.
@@ -83,6 +91,18 @@ impl From<tokio::sync::mpsc::error::TryRecvError> for Error {
 impl From<tokio::sync::oneshot::error::RecvError> for Error {
     fn from(_: tokio::sync::oneshot::error::RecvError) -> Self {
         Error::ChannelReceive
+    }
+}
+
+/// Implements conversion from `tokio::sync::mpsc::error::TrySendError<T>` to
+/// channel-related errors that preserve whether the channel was full or closed.
+impl<T> From<tokio::sync::mpsc::error::TrySendError<T>> for Error {
+    fn from(err: tokio::sync::mpsc::error::TrySendError<T>) -> Self {
+        use tokio::sync::mpsc::error::TrySendError;
+        match err {
+            TrySendError::Full(_) => Error::ChannelFull,
+            TrySendError::Closed(_) => Error::ChannelClosed,
+        }
     }
 }
 

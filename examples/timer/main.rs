@@ -54,7 +54,11 @@ impl TimerModel {
     }
 
     fn toggle(&mut self) -> Option<Cmd> {
-        if self.running { self.stop() } else { self.start() }
+        if self.running {
+            self.stop()
+        } else {
+            self.start()
+        }
     }
 
     fn reset(&mut self) -> Option<Cmd> {
@@ -114,7 +118,11 @@ impl Model for TimerModel {
         let mut m = TimerModel::new();
         // Start ticking immediately if running
         m.last_tick = Some(Instant::now());
-        let cmd = if m.running { Some(TimerModel::tick_cmd()) } else { None };
+        let cmd = if m.running {
+            Some(TimerModel::tick_cmd())
+        } else {
+            None
+        };
         (m, cmd)
     }
 
@@ -168,7 +176,14 @@ impl TimerModel {
         // Start is disabled while running (mirrors Go's enabled state semantics)
         let start_label = if self.running { "start" } else { "start" }; // label remains 'start'
         let stop_label = if self.running { "stop" } else { "stop" };
-        let mut keys = vec![format!("s {}", if self.running { stop_label } else { start_label })];
+        let mut keys = vec![format!(
+            "s {}",
+            if self.running {
+                stop_label
+            } else {
+                start_label
+            }
+        )];
         keys.push("r reset".into());
         keys.push("q quit".into());
         format!("  {}", keys.join(" • "))

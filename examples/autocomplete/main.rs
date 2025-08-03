@@ -10,8 +10,8 @@
 //! Styling note: The Go example uses lipgloss (color 63) for prompt/cursor.
 //! We add a comment here to capture that intent; terminal coloring is kept minimal.
 
-use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
 use bubbletea_rs::command::batch;
+use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
 use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::style::{Color, Stylize};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT};
@@ -204,7 +204,10 @@ impl Model for AutocompleteModel {
 fn fetch_repos() -> Cmd {
     Box::pin(async move {
         let mut headers = HeaderMap::new();
-        headers.insert(ACCEPT, HeaderValue::from_static("application/vnd.github+json"));
+        headers.insert(
+            ACCEPT,
+            HeaderValue::from_static("application/vnd.github+json"),
+        );
         headers.insert(
             "X-GitHub-Api-Version",
             HeaderValue::from_static("2022-11-28"),

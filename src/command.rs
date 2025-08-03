@@ -2,7 +2,7 @@
 //! Commands are asynchronous operations that can produce messages to update the model.
 
 use crate::event::{
-    ClearScreenMsg, DisableBracketedPasteMsg, DisableMouseMsg, DisableReportFocusMsg,
+    next_timer_id, ClearScreenMsg, DisableBracketedPasteMsg, DisableMouseMsg, DisableReportFocusMsg,
     EnableBracketedPasteMsg, EnableMouseAllMotionMsg, EnableMouseCellMotionMsg,
     EnableReportFocusMsg, EnterAltScreenMsg, ExitAltScreenMsg, HideCursorMsg, InterruptMsg, Msg,
     PrintMsg, PrintfMsg, QuitMsg, RequestWindowSizeMsg, ShowCursorMsg, SuspendMsg,
@@ -13,6 +13,7 @@ use std::process::Command as StdCommand;
 use std::time::Duration;
 use tokio::process::Command as TokioCommand;
 use tokio::time::interval;
+use tokio_util::sync::CancellationToken;
 
 /// A command represents an asynchronous operation that may produce a message.
 ///
@@ -78,10 +79,10 @@ pub fn suspend() -> Cmd {
 pub fn batch(cmds: Vec<Cmd>) -> Cmd {
     Box::pin(async move {
         use futures::future::join_all;
-        
+
         let results = join_all(cmds).await;
         let messages: Vec<Msg> = results.into_iter().flatten().collect();
-        
+
         if messages.is_empty() {
             None
         } else {
@@ -129,7 +130,7 @@ where
         let mut ticker = interval(duration);
         // The first tick completes immediately; advance once to move to the start
         ticker.tick().await; // consume the immediate tick
-        // Now wait for one full duration before emitting
+                             // Now wait for one full duration before emitting
         ticker.tick().await;
         Some(f(duration))
     })
@@ -148,12 +149,49 @@ pub fn every<F>(duration: Duration, f: F) -> Cmd
 where
     F: Fn(Duration) -> Msg + Send + 'static,
 {
+    let timer_id = next_timer_id();
+    let cancellation_token = CancellationToken::new();
+    
     Box::pin(async move {
         Some(Box::new(crate::event::EveryMsgInternal {
             duration,
             func: Box::new(f),
+            cancellation_token,
+            timer_id,
         }) as Msg)
     })
+}
+
+/// Creates a command that produces a message repeatedly at a regular interval with cancellation support.
+///
+/// This command will continuously send messages produced by the provided closure `f`
+/// after every `duration` until the program exits or the timer is cancelled.
+///
+/// # Arguments
+///
+/// * `duration` - The duration between messages.
+/// * `f` - A closure that takes a `Duration` and returns a `Msg`.
+///
+/// # Returns
+///
+/// Returns a tuple containing the command and the timer ID for cancellation.
+pub fn every_with_id<F>(duration: Duration, f: F) -> (Cmd, u64)
+where
+    F: Fn(Duration) -> Msg + Send + 'static,
+{
+    let timer_id = next_timer_id();
+    let cancellation_token = CancellationToken::new();
+    
+    let cmd = Box::pin(async move {
+        Some(Box::new(crate::event::EveryMsgInternal {
+            duration,
+            func: Box::new(f),
+            cancellation_token,
+            timer_id,
+        }) as Msg)
+    });
+    
+    (cmd, timer_id)
 }
 
 /// Creates a command that executes an external process.
@@ -165,7 +203,7 @@ where
 ///
 /// * `cmd` - The `std::process::Command` to execute.
 /// * `f` - A closure that takes a `Result<std::process::Output, std::io::Error>`
-///         and returns a `Msg`.
+///   and returns a `Msg`.
 pub fn exec_process<F>(cmd: StdCommand, f: F) -> Cmd
 where
     F: Fn(Result<std::process::Output, std::io::Error>) -> Msg + Send + 'static,
@@ -303,4 +341,24 @@ pub fn printf(s: String) -> Cmd {
 /// the terminal window's title.
 pub fn set_window_title(title: String) -> Cmd {
     Box::pin(async move { Some(Box::new(crate::event::SetWindowTitleMsg(title)) as Msg) })
+}
+
+/// Creates a command that cancels a specific timer.
+///
+/// This command sends a `CancelTimerMsg` to the program, which will stop
+/// the timer with the given ID.
+///
+/// # Arguments
+///
+/// * `timer_id` - The ID of the timer to cancel.
+pub fn cancel_timer(timer_id: u64) -> Cmd {
+    Box::pin(async move { Some(Box::new(crate::event::CancelTimerMsg { timer_id }) as Msg) })
+}
+
+/// Creates a command that cancels all active timers.
+///
+/// This command sends a `CancelAllTimersMsg` to the program, which will stop
+/// all currently running timers.
+pub fn cancel_all_timers() -> Cmd {
+    Box::pin(async move { Some(Box::new(crate::event::CancelAllTimersMsg) as Msg) })
 }

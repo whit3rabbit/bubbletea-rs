@@ -16,10 +16,10 @@
 //! maintaining the same behavior: increment by 25% every second with smooth
 //! animations, quit on any key press, and automatically quit when reaching 100%.
 
-use bubbletea_rs::{quit, tick, batch, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
 use bubbletea_rs::gradient::gradient_filled_segment;
-use std::time::Duration;
+use bubbletea_rs::{batch, quit, tick, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
 use std::sync::OnceLock;
+use std::time::Duration;
 
 static DEBUG_ENABLED: OnceLock<bool> = OnceLock::new();
 fn debug_enabled() -> bool {
@@ -30,7 +30,6 @@ macro_rules! dlog {
         if debug_enabled() { eprintln!($($arg)*); }
     }
 }
-
 
 /// Message for progress tick updates
 #[derive(Debug)]
@@ -62,36 +61,49 @@ impl AnimatedProgressBar {
             animation_speed: 0.1, // Animation step size
         }
     }
-    
+
     /// Set target percentage for animation
     pub fn set_percent(&mut self, percent: f64) -> Option<Cmd> {
         let old_target = self.target_percent;
         self.target_percent = percent.clamp(0.0, 1.0);
-        
-        dlog!("set_percent: {:.3} -> {:.3}, current={:.3}", old_target, self.target_percent, self.current_percent);
-        
+
+        dlog!(
+            "set_percent: {:.3} -> {:.3}, current={:.3}",
+            old_target,
+            self.target_percent,
+            self.current_percent
+        );
+
         // If we need to animate, start frame messages
         if (self.current_percent - self.target_percent).abs() > 0.001 {
-            dlog!("set_percent: starting animation (diff={:.3})", (self.current_percent - self.target_percent).abs());
-            Some(tick(Duration::from_millis(16), |_| Box::new(ProgressFrameMsg) as Msg)) // ~60fps
+            dlog!(
+                "set_percent: starting animation (diff={:.3})",
+                (self.current_percent - self.target_percent).abs()
+            );
+            Some(tick(Duration::from_millis(16), |_| {
+                Box::new(ProgressFrameMsg) as Msg
+            })) // ~60fps
         } else {
-            dlog!("set_percent: no animation needed (diff={:.3})", (self.current_percent - self.target_percent).abs());
+            dlog!(
+                "set_percent: no animation needed (diff={:.3})",
+                (self.current_percent - self.target_percent).abs()
+            );
             None
         }
     }
-    
+
     /// Increment target percentage by amount
     pub fn incr_percent(&mut self, amount: f64) -> Option<Cmd> {
         self.set_percent(self.target_percent + amount)
     }
-    
+
     /// Update animation frame
     pub fn update_animation(&mut self) -> Option<Cmd> {
         const MIN_STEP: f64 = 0.005; // Minimum step per frame (0.5%)
         const TOLERANCE: f64 = 0.0001; // When to snap to target
-        
+
         let diff = self.target_percent - self.current_percent;
-        
+
         if diff.abs() > TOLERANCE {
             // Calculate step: use larger of exponential decay or minimum step
             let exponential_step = diff * self.animation_speed;
@@ -99,12 +111,18 @@ impl AnimatedProgressBar {
                 exponential_step
             } else {
                 // Use minimum step with correct sign when exponential becomes too small
-                if diff > 0.0 { MIN_STEP } else { -MIN_STEP }
+                if diff > 0.0 {
+                    MIN_STEP
+                } else {
+                    -MIN_STEP
+                }
             };
-            
+
             // Check if this step would overshoot the target
-            if (self.current_percent + step - self.target_percent).abs() < TOLERANCE ||
-               (diff > 0.0 && step >= diff) || (diff < 0.0 && step <= diff) {
+            if (self.current_percent + step - self.target_percent).abs() < TOLERANCE
+                || (diff > 0.0 && step >= diff)
+                || (diff < 0.0 && step <= diff)
+            {
                 // Snap to target to avoid overshoot
                 self.current_percent = self.target_percent;
                 dlog!("animation: snapped to target {:.3}", self.target_percent);
@@ -112,9 +130,16 @@ impl AnimatedProgressBar {
             } else {
                 // Apply step and continue animation
                 self.current_percent += step;
-                dlog!("animation: step {:.4}, now at {:.3}, target {:.3}", step, self.current_percent, self.target_percent);
+                dlog!(
+                    "animation: step {:.4}, now at {:.3}, target {:.3}",
+                    step,
+                    self.current_percent,
+                    self.target_percent
+                );
                 // Always schedule next frame if not at target
-                Some(tick(Duration::from_millis(16), |_| Box::new(ProgressFrameMsg) as Msg))
+                Some(tick(Duration::from_millis(16), |_| {
+                    Box::new(ProgressFrameMsg) as Msg
+                }))
             }
         } else {
             // Already at target within tolerance
@@ -123,12 +148,12 @@ impl AnimatedProgressBar {
             None // No animation needed
         }
     }
-    
+
     /// Get current animated percentage
     pub fn percent(&self) -> f64 {
         self.current_percent
     }
-    
+
     /// Render animated progress bar
     pub fn view(&self) -> String {
         let percent = self.current_percent.clamp(0.0, 1.0);
@@ -143,7 +168,10 @@ impl AnimatedProgressBar {
 
         let line = format!("{} {:5.1}%", bar, percent * 100.0);
         if debug_enabled() {
-            format!("{}\n[dbg] cur={:.3} tgt={:.3}", line, self.current_percent, self.target_percent)
+            format!(
+                "{}\n[dbg] cur={:.3} tgt={:.3}",
+                line, self.current_percent, self.target_percent
+            )
         } else {
             line
         }
@@ -162,12 +190,12 @@ impl ProgressAnimatedModel {
             progress: AnimatedProgressBar::new(),
         }
     }
-    
+
     pub fn update_window_size(&mut self, width: u16, _height: u16) {
         // Match Go behavior: width - padding*2 - 4, max 80
         const PADDING: u16 = 2;
         const MAX_WIDTH: usize = 80;
-        
+
         let available_width = width.saturating_sub(PADDING * 2).saturating_sub(4) as usize;
         self.progress.width = available_width.min(MAX_WIDTH);
     }
@@ -185,21 +213,25 @@ impl Model for ProgressAnimatedModel {
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         // Handle progress tick messages
         if msg.downcast_ref::<ProgressTickMsg>().is_some() {
-            dlog!("tick: current {:.3}, target {:.3}", self.progress.current_percent, self.progress.target_percent);
-            
+            dlog!(
+                "tick: current {:.3}, target {:.3}",
+                self.progress.current_percent,
+                self.progress.target_percent
+            );
+
             // Check if already at 100% (current percentage)
             if self.progress.current_percent >= 1.0 {
                 dlog!("tick: current at 100%, quitting");
                 return Some(quit()); // Auto-quit when complete
             }
-            
+
             // Increment by 25% with animation (matching Go behavior)
             let old_target = self.progress.target_percent;
             let animation_cmd = self.progress.incr_percent(0.25);
             let new_target = self.progress.target_percent;
-            
+
             dlog!("tick: target {:.3} -> {:.3}", old_target, new_target);
-            
+
             // Batch next tick with animation command (matching Go's tea.Batch)
             let next_tick = tick(Duration::from_secs(1), |_| Box::new(ProgressTickMsg) as Msg);
             match animation_cmd {
@@ -211,14 +243,22 @@ impl Model for ProgressAnimatedModel {
         else if msg.downcast_ref::<ProgressFrameMsg>().is_some() {
             let before = self.progress.current_percent;
             let cmd = self.progress.update_animation();
-            dlog!("frame: {:.3} -> {:.3}, next_cmd? {}", before, self.progress.current_percent, cmd.is_some());
-            
+            dlog!(
+                "frame: {:.3} -> {:.3}, next_cmd? {}",
+                before,
+                self.progress.current_percent,
+                cmd.is_some()
+            );
+
             // Check for completion: only quit when current actually reaches 100%
             if self.progress.current_percent >= 1.0 {
-                dlog!("frame: current reached 100% ({:.3}), quitting", self.progress.current_percent);
+                dlog!(
+                    "frame: current reached 100% ({:.3}), quitting",
+                    self.progress.current_percent
+                );
                 return Some(quit());
             }
-            
+
             cmd
         }
         // Handle window size changes
@@ -229,15 +269,14 @@ impl Model for ProgressAnimatedModel {
         // Handle keyboard input - ANY key quits (matching Go behavior)
         else if msg.downcast_ref::<KeyMsg>().is_some() {
             Some(quit())
-        }
-        else {
+        } else {
             None
         }
     }
 
     fn view(&self) -> String {
         const PADDING: &str = "  "; // 2 spaces padding
-        
+
         format!(
             "\n{}{}\n\n{}Press any key to quit",
             PADDING,
@@ -250,11 +289,10 @@ impl Model for ProgressAnimatedModel {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create and run the program (matching Go main function behavior)
-    let program = Program::<ProgressAnimatedModel>::builder()
-        .build()?;
-    
+    let program = Program::<ProgressAnimatedModel>::builder().build()?;
+
     // Run the program
     program.run().await?;
-    
+
     Ok(())
 }

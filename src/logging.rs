@@ -11,8 +11,7 @@ pub fn log_to_file(path: impl AsRef<Path>, prefix: &str) -> Result<(), Error> {
     let _file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(path.as_ref())
-        .map_err(|e| Error::Configuration(format!("Failed to open log file: {}", e)))?;
+        .open(path.as_ref())?;
 
     log::info!("Logging initialized with prefix: {}", prefix);
 

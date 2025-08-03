@@ -12,10 +12,10 @@
 
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
 use crossterm::event::KeyCode;
-use crossterm::terminal;
 use crossterm::style::{Color, Stylize};
-use unicode_width::UnicodeWidthStr;
+use crossterm::terminal;
 use std::env;
+use unicode_width::UnicodeWidthStr;
 
 // Synthetic message used to trigger the initial render immediately after startup.
 struct InitRenderMsg;
@@ -34,10 +34,20 @@ pub struct KeyBinding {
 }
 
 impl KeyBinding {
-    pub fn new(keys: Vec<KeyCode>, help_key: &'static str, help_desc: &'static str, symbol: &'static str) -> Self {
-        Self { keys, help_key, help_desc, symbol }
+    pub fn new(
+        keys: Vec<KeyCode>,
+        help_key: &'static str,
+        help_desc: &'static str,
+        symbol: &'static str,
+    ) -> Self {
+        Self {
+            keys,
+            help_key,
+            help_desc,
+            symbol,
+        }
     }
-    
+
     pub fn matches(&self, key: KeyCode) -> bool {
         self.keys.contains(&key)
     }
@@ -57,11 +67,31 @@ impl HelpModel {
     pub fn new() -> Self {
         let keys = vec![
             KeyBinding::new(vec![KeyCode::Up, KeyCode::Char('k')], "↑/k", "move up", "↑"),
-            KeyBinding::new(vec![KeyCode::Down, KeyCode::Char('j')], "↓/j", "move down", "↓"),
-            KeyBinding::new(vec![KeyCode::Left, KeyCode::Char('h')], "←/h", "move left", "←"),
-            KeyBinding::new(vec![KeyCode::Right, KeyCode::Char('l')], "→/l", "move right", "→"),
+            KeyBinding::new(
+                vec![KeyCode::Down, KeyCode::Char('j')],
+                "↓/j",
+                "move down",
+                "↓",
+            ),
+            KeyBinding::new(
+                vec![KeyCode::Left, KeyCode::Char('h')],
+                "←/h",
+                "move left",
+                "←",
+            ),
+            KeyBinding::new(
+                vec![KeyCode::Right, KeyCode::Char('l')],
+                "→/l",
+                "move right",
+                "→",
+            ),
             KeyBinding::new(vec![KeyCode::Char('?')], "?", "toggle help", ""),
-            KeyBinding::new(vec![KeyCode::Char('q'), KeyCode::Esc, KeyCode::Char('c')], "q", "quit", ""),
+            KeyBinding::new(
+                vec![KeyCode::Char('q'), KeyCode::Esc, KeyCode::Char('c')],
+                "q",
+                "quit",
+                "",
+            ),
         ];
 
         Self {
@@ -78,21 +108,29 @@ impl HelpModel {
     }
 
     pub fn short_help(&self) -> Vec<&KeyBinding> {
-        self.keys.iter().filter(|k| k.help_key == "?" || k.help_key == "q").collect()
+        self.keys
+            .iter()
+            .filter(|k| k.help_key == "?" || k.help_key == "q")
+            .collect()
     }
 
     pub fn full_help(&self) -> (Vec<&KeyBinding>, Vec<&KeyBinding>) {
-        let navigation: Vec<&KeyBinding> = self.keys.iter()
+        let navigation: Vec<&KeyBinding> = self
+            .keys
+            .iter()
             .filter(|k| matches!(k.help_key, "↑/k" | "↓/j" | "←/h" | "→/l"))
             .collect();
-        let actions: Vec<&KeyBinding> = self.keys.iter()
+        let actions: Vec<&KeyBinding> = self
+            .keys
+            .iter()
             .filter(|k| matches!(k.help_key, "?" | "q"))
             .collect();
         (navigation, actions)
     }
 
     pub fn format_help_line(bindings: &[&KeyBinding]) -> String {
-        bindings.iter()
+        bindings
+            .iter()
             .map(|binding| format!("{} {}", binding.help_key, binding.help_desc))
             .collect::<Vec<_>>()
             .join(" • ")
@@ -141,8 +179,16 @@ impl HelpModel {
         let max_len = col1.len().max(col2.len());
 
         for i in 0..max_len {
-            let left = if i < left_items.len() { &left_items[i] } else { "" };
-            let right = if i < right_items.len() { &right_items[i] } else { "" };
+            let left = if i < left_items.len() {
+                &left_items[i]
+            } else {
+                ""
+            };
+            let right = if i < right_items.len() {
+                &right_items[i]
+            } else {
+                ""
+            };
 
             // Truncate/pad left to left_w so right column starts uniformly
             let left_display = UnicodeWidthStr::width(left);
@@ -151,7 +197,9 @@ impl HelpModel {
                 let mut w = 0;
                 for ch in left.chars() {
                     let cw = UnicodeWidthStr::width(ch.to_string().as_str());
-                    if w + cw + 3 > left_w { break; }
+                    if w + cw + 3 > left_w {
+                        break;
+                    }
                     acc.push(ch);
                     w += cw;
                 }
@@ -169,7 +217,9 @@ impl HelpModel {
                 let mut w = 0;
                 for ch in right.chars() {
                     let cw = UnicodeWidthStr::width(ch.to_string().as_str());
-                    if w + cw + 3 > right_w { break; }
+                    if w + cw + 3 > right_w {
+                        break;
+                    }
                     acc.push(ch);
                     w += cw;
                 }
@@ -216,7 +266,8 @@ impl HelpModel {
                     let mut w = 0;
                     for ch in cell.chars() {
                         let cw = UnicodeWidthStr::width(ch.to_string().as_str());
-                        if w + cw + 3 > col_width { // reserve for "..."
+                        if w + cw + 3 > col_width {
+                            // reserve for "..."
                             break;
                         }
                         acc.push(ch);
@@ -230,7 +281,9 @@ impl HelpModel {
                 };
 
                 line.push_str(&cell_text);
-                if c + 1 < columns { line.push_str("  "); }
+                if c + 1 < columns {
+                    line.push_str("  ");
+                }
             }
             out.push(line.trim_start().trim_end().to_string());
         }
@@ -284,7 +337,14 @@ impl Model for HelpModel {
         }
 
         let status = if let Some(ref last_key) = self.last_key {
-            format!("You chose: {}", last_key.clone().with(Color::Rgb { r: 255, g: 117, b: 183 }))
+            format!(
+                "You chose: {}",
+                last_key.clone().with(Color::Rgb {
+                    r: 255,
+                    g: 117,
+                    b: 183
+                })
+            )
         } else {
             "Waiting for input...".to_string()
         };
@@ -326,7 +386,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .signal_handler(true)
         .alt_screen(true)
         .build()?;
-    
+
     program.run().await?;
     Ok(())
 }

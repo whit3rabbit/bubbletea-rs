@@ -1,4 +1,4 @@
-use bubbletea_rs::{Model, Msg, KeyMsg, QuitMsg};
+use bubbletea_rs::{KeyMsg, Model, Msg, QuitMsg};
 use crossterm::event::{KeyCode, KeyModifiers};
 
 // Import the model from the main file
@@ -10,10 +10,10 @@ use simple_main::{SimpleModel, TickMsg};
 #[test]
 fn test_simple_model_init() {
     let (model, cmd) = SimpleModel::init();
-    
+
     // Should start with count of 5
     assert_eq!(model.count, 5);
-    
+
     // Should return a command (the timer)
     assert!(cmd.is_some());
 }
@@ -22,7 +22,7 @@ fn test_simple_model_init() {
 fn test_simple_model_view() {
     let model = SimpleModel { count: 3 };
     let view = model.view();
-    
+
     // Should contain the countdown message
     assert!(view.contains("3 seconds"));
     assert!(view.contains("Hi. This program will exit"));
@@ -32,7 +32,7 @@ fn test_simple_model_view() {
 fn test_simple_model_view_finished() {
     let model = SimpleModel { count: 0 };
     let view = model.view();
-    
+
     // Should show completion message
     assert!(view.contains("Time's up"));
 }
@@ -41,12 +41,12 @@ fn test_simple_model_view_finished() {
 fn test_tick_message_decrements_count() {
     let mut model = SimpleModel { count: 3 };
     let tick_msg = Box::new(TickMsg) as Msg;
-    
+
     let cmd = model.update(tick_msg);
-    
+
     // Count should be decremented
     assert_eq!(model.count, 2);
-    
+
     // Should not return a quit command yet
     assert!(cmd.is_none());
 }
@@ -55,12 +55,12 @@ fn test_tick_message_decrements_count() {
 fn test_tick_message_at_zero_quits() {
     let mut model = SimpleModel { count: 1 };
     let tick_msg = Box::new(TickMsg) as Msg;
-    
+
     let cmd = model.update(tick_msg);
-    
+
     // Count should be decremented to 0
     assert_eq!(model.count, 0);
-    
+
     // Should return a quit command
     assert!(cmd.is_some());
 }
@@ -72,12 +72,12 @@ fn test_q_key_quits() {
         key: KeyCode::Char('q'),
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Count should remain unchanged
     assert_eq!(model.count, 3);
-    
+
     // Should return a quit command
     assert!(cmd.is_some());
 }
@@ -89,9 +89,9 @@ fn test_uppercase_q_key_quits() {
         key: KeyCode::Char('Q'),
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should return a quit command
     assert!(cmd.is_some());
 }
@@ -103,9 +103,9 @@ fn test_esc_key_quits() {
         key: KeyCode::Esc,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Should return a quit command
     assert!(cmd.is_some());
 }
@@ -117,12 +117,12 @@ fn test_other_keys_ignored() {
         key: KeyCode::Char('a'),
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd = model.update(key_msg);
-    
+
     // Count should remain unchanged
     assert_eq!(model.count, 3);
-    
+
     // Should not return any command
     assert!(cmd.is_none());
 }
@@ -131,12 +131,12 @@ fn test_other_keys_ignored() {
 fn test_quit_message_handling() {
     let mut model = SimpleModel { count: 3 };
     let quit_msg = Box::new(QuitMsg) as Msg;
-    
+
     let cmd = model.update(quit_msg);
-    
+
     // Count should remain unchanged
     assert_eq!(model.count, 3);
-    
+
     // Should not return any command (quit is already being processed)
     assert!(cmd.is_none());
 }
@@ -144,14 +144,14 @@ fn test_quit_message_handling() {
 #[test]
 fn test_countdown_sequence() {
     let mut model = SimpleModel { count: 3 };
-    
+
     // Simulate multiple tick messages
     for expected_count in [2, 1, 0] {
         let tick_msg = Box::new(TickMsg) as Msg;
         let cmd = model.update(tick_msg);
-        
+
         assert_eq!(model.count, expected_count);
-        
+
         if expected_count == 0 {
             // Last tick should trigger quit
             assert!(cmd.is_some());
@@ -166,12 +166,12 @@ fn test_countdown_sequence() {
 fn test_negative_count_behavior() {
     let mut model = SimpleModel { count: 0 };
     let tick_msg = Box::new(TickMsg) as Msg;
-    
+
     let cmd = model.update(tick_msg);
-    
+
     // Count goes negative
     assert_eq!(model.count, -1);
-    
+
     // Should still trigger quit
     assert!(cmd.is_some());
 }
@@ -180,10 +180,10 @@ fn test_negative_count_behavior() {
 #[test]
 fn test_tick_msg_type() {
     let tick_msg = Box::new(TickMsg) as Msg;
-    
+
     // Should be able to downcast to TickMsg
     assert!(tick_msg.downcast_ref::<TickMsg>().is_some());
-    
+
     // Should not be able to downcast to other types
     assert!(tick_msg.downcast_ref::<QuitMsg>().is_none());
     assert!(tick_msg.downcast_ref::<KeyMsg>().is_none());

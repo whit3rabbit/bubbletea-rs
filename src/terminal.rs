@@ -48,6 +48,8 @@ pub struct Terminal {
     focus_reporting: bool,
     cursor_visible: bool,
     output_writer: Option<Arc<Mutex<dyn AsyncWrite + Send + Unpin>>>,
+    /// Reusable buffer for string operations to minimize allocations
+    render_buffer: String,
 }
 
 impl Terminal {
@@ -61,6 +63,7 @@ impl Terminal {
             focus_reporting: false,
             cursor_visible: true,
             output_writer,
+            render_buffer: String::with_capacity(8192), // Pre-allocate 8KB buffer
         })
     }
 }
@@ -78,6 +81,7 @@ impl TerminalInterface for Terminal {
             focus_reporting: false,
             cursor_visible: true,
             output_writer,
+            render_buffer: String::with_capacity(8192),
         })
     }
 
@@ -194,13 +198,30 @@ impl TerminalInterface for Terminal {
 
         if let Some(writer) = &mut self.output_writer {
             use tokio::io::AsyncWriteExt;
-            // Move cursor to top-left and clear screen
-            let normalized = content.replace('\n', "\r\n");
-            let clear_sequence = format!("\x1b[H\x1b[2J{}", normalized);
+            
+            // Pre-allocate buffer for efficient rendering
+            self.render_buffer.clear();
+            
+            // Reserve space for the clear sequence plus content
+            let estimated_size = 8 + content.len() + content.chars().filter(|&c| c == '\n').count();
+            self.render_buffer.reserve(estimated_size);
+            
+            // Add clear sequence
+            self.render_buffer.push_str("\x1b[H\x1b[2J");
+            
+            // Efficiently replace newlines by iterating through chars
+            for ch in content.chars() {
+                if ch == '\n' {
+                    self.render_buffer.push_str("\r\n");
+                } else {
+                    self.render_buffer.push(ch);
+                }
+            }
+            
             writer
                 .lock()
                 .await
-                .write_all(clear_sequence.as_bytes())
+                .write_all(self.render_buffer.as_bytes())
                 .await?;
             writer.lock().await.flush().await?;
         } else {
@@ -208,10 +229,23 @@ impl TerminalInterface for Terminal {
             execute!(io::stdout(), MoveTo(0, 0))?;
             execute!(io::stdout(), Clear(ClearType::All))?;
 
-            // Print the content
-            let normalized = content.replace('\n', "\r\n");
-            print!("{}", normalized);
-
+            // Pre-allocate buffer for efficient rendering
+            self.render_buffer.clear();
+            
+            // Reserve space for content plus newline replacements
+            let estimated_size = content.len() + content.chars().filter(|&c| c == '\n').count();
+            self.render_buffer.reserve(estimated_size);
+            
+            // Efficiently replace newlines by iterating through chars
+            for ch in content.chars() {
+                if ch == '\n' {
+                    self.render_buffer.push_str("\r\n");
+                } else {
+                    self.render_buffer.push(ch);
+                }
+            }
+            
+            print!("{}", self.render_buffer);
             io::stdout().flush()?;
         }
         Ok(())

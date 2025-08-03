@@ -1,5 +1,5 @@
-use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
 use bubbletea_rs::command::{batch, tick, window_size};
+use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
 use crossterm::style::Stylize; // for simple coloring; TODO(lipgloss): replace with lipgloss styles
 use std::fmt::Write as _;
 
@@ -48,15 +48,26 @@ impl TextArea {
             ..Default::default()
         }
     }
-    fn set_width(&mut self, w: usize) { self.width = w; }
-    fn set_height(&mut self, h: usize) { self.height = h; }
-    fn reset(&mut self) { self.value.clear(); }
+    fn set_width(&mut self, w: usize) {
+        self.width = w;
+    }
+    fn set_height(&mut self, h: usize) {
+        self.height = h;
+    }
+    fn reset(&mut self) {
+        self.value.clear();
+    }
     fn view(&self) -> String {
         let mut out = String::new();
         // Show placeholder when input is empty (even if focused), like the Go example,
         // and render it in dark gray to appear subtle.
         if self.value.is_empty() {
-            let _ = write!(&mut out, "{}{}", self.prompt, self.placeholder.clone().dark_grey());
+            let _ = write!(
+                &mut out,
+                "{}{}",
+                self.prompt,
+                self.placeholder.clone().dark_grey()
+            );
         } else {
             let _ = write!(&mut out, "{}{}", self.prompt, self.value);
         }
@@ -77,9 +88,19 @@ struct Viewport {
 }
 
 impl Viewport {
-    fn new(width: usize, height: usize) -> Self { Self { width, height, ..Default::default() } }
-    fn set_content(&mut self, s: String) { self.content = s; }
-    fn goto_bottom(&mut self) { self.scroll = usize::MAX; }
+    fn new(width: usize, height: usize) -> Self {
+        Self {
+            width,
+            height,
+            ..Default::default()
+        }
+    }
+    fn set_content(&mut self, s: String) {
+        self.content = s;
+    }
+    fn goto_bottom(&mut self) {
+        self.scroll = usize::MAX;
+    }
     fn view(&self) -> String {
         // Just return the content; wrapping is handled by the model when setting content.
         self.content.clone()
@@ -106,33 +127,43 @@ impl Model for ChatModel {
         vp.set_content("Welcome to the chat room!\nType a message and press Enter to send.".into());
 
         (
-            Self { viewport: vp, textarea: ta, messages: vec![] },
+            Self {
+                viewport: vp,
+                textarea: ta,
+                messages: vec![],
+            },
             Some(batch(vec![
                 window_size(),
-                tick(CURSOR_BLINK_INTERVAL, |_| Box::new(BlinkMsg) as Msg)
+                tick(CURSOR_BLINK_INTERVAL, |_| Box::new(BlinkMsg) as Msg),
             ])),
         )
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         let mut cmds = Vec::new();
-        
+
         // Handle blink message
         if msg.downcast_ref::<BlinkMsg>().is_some() {
             self.textarea.cursor_visible = !self.textarea.cursor_visible;
             cmds.push(tick(CURSOR_BLINK_INTERVAL, |_| Box::new(BlinkMsg) as Msg));
         }
-        
+
         if let Some(ws) = msg.downcast_ref::<bubbletea_rs::WindowSizeMsg>() {
             self.viewport.width = ws.width as usize;
             self.textarea.set_width(ws.width as usize);
             // Height calculation: viewport fills remaining space above textarea and gap.
             let gap_h = GAP.matches('\n').count() + 1; // approx lipgloss.Height(gap)
-            self.viewport.height = (ws.height as usize).saturating_sub(self.textarea.height).saturating_sub(gap_h);
+            self.viewport.height = (ws.height as usize)
+                .saturating_sub(self.textarea.height)
+                .saturating_sub(gap_h);
             // Recompute wrapped viewport content at the new width
             self.recompute_viewport_content();
             self.viewport.goto_bottom();
-            return if cmds.is_empty() { None } else { Some(batch(cmds)) };
+            return if cmds.is_empty() {
+                None
+            } else {
+                Some(batch(cmds))
+            };
         }
 
         if let Some(k) = msg.downcast_ref::<KeyMsg>() {
@@ -155,21 +186,30 @@ impl Model for ChatModel {
                     self.viewport.goto_bottom();
                     return None;
                 }
-                KeyCode::Backspace => { self.textarea.value.pop(); return None; }
+                KeyCode::Backspace => {
+                    self.textarea.value.pop();
+                    return None;
+                }
                 KeyCode::Char(ch) => {
                     // Detect Ctrl+C (quit)
                     if ch == 'c' && k.modifiers.contains(KeyModifiers::CONTROL) {
                         println!("{}", self.textarea.value);
                         return Some(quit());
                     }
-                    if self.textarea.value.len() < self.textarea.char_limit { self.textarea.value.push(ch); }
+                    if self.textarea.value.len() < self.textarea.char_limit {
+                        self.textarea.value.push(ch);
+                    }
                     return None;
                 }
                 _ => {}
             }
         }
-        
-        if cmds.is_empty() { None } else { Some(batch(cmds)) }
+
+        if cmds.is_empty() {
+            None
+        } else {
+            Some(batch(cmds))
+        }
     }
 
     fn view(&self) -> String {
@@ -183,7 +223,12 @@ impl ChatModel {
         let wrapped_lines: Vec<String> = self
             .messages
             .iter()
-            .flat_map(|m| wrap_text(m, width).lines().map(|s| s.to_string()).collect::<Vec<_>>())
+            .flat_map(|m| {
+                wrap_text(m, width)
+                    .lines()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+            })
             .collect();
 
         // Keep only the bottom-most lines that fit in height to mimic viewport bottom behavior
@@ -194,7 +239,9 @@ impl ChatModel {
 }
 
 fn wrap_text(s: &str, width: usize) -> String {
-    if width == 0 { return s.to_string(); }
+    if width == 0 {
+        return s.to_string();
+    }
     let mut out = Vec::new();
     for raw_line in s.split('\n') {
         let mut line = String::new();

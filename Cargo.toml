@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     ".",
-    "bubbles-rs",
     "examples/autocomplete",
     "examples/cellbuffer",
     "examples/chat",
@@ -60,8 +59,8 @@ focus-reporting = []
 testing = []
 
 [dependencies]
-crossterm = { version = "0.27.0", features = ["event-stream"] }
-tokio = { version = "1.25.0", features = ["full"], optional = true }
+crossterm = { version = "0.29.0", features = ["event-stream"] }
+tokio = { version = "1.47.0", features = ["full"], optional = true }
 async-std = { version = "1.12", optional = true }
 thiserror = "1.0"
 anyhow = "1.0"

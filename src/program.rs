@@ -10,9 +10,8 @@ use std::panic;
 use std::sync::OnceLock;
 use tokio::sync::mpsc;
 
-static ORIGINAL_PANIC_HOOK: OnceLock<
-    Box<dyn Fn(&panic::PanicHookInfo<'_>) + Send + Sync + 'static>,
-> = OnceLock::new();
+type PanicHook = Box<dyn Fn(&panic::PanicHookInfo<'_>) + Send + Sync + 'static>;
+static ORIGINAL_PANIC_HOOK: OnceLock<PanicHook> = OnceLock::new();
 
 /// Defines the different modes for mouse motion reporting.
 #[derive(Debug, Clone, Copy)]
@@ -25,9 +24,11 @@ pub enum MouseMotion {
     All,
 }
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::AsyncWrite;
 use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
 /// Configuration options for a `Program`.
@@ -59,6 +60,10 @@ pub struct ProgramConfig {
     pub message_filter: Option<Box<dyn Fn(Msg) -> Option<Msg> + Send>>,
     /// Optional custom input source.
     pub input_source: Option<InputSource>,
+    /// The buffer size for the event channel (None for unbounded, Some(size) for bounded).
+    pub event_channel_buffer: Option<usize>,
+    /// Whether to enable memory usage monitoring.
+    pub memory_monitoring: bool,
 }
 
 impl std::fmt::Debug for ProgramConfig {
@@ -97,6 +102,8 @@ impl Default for ProgramConfig {
             cancellation_token: None,
             message_filter: None,
             input_source: None,
+            event_channel_buffer: Some(1000), // Default to bounded channel with 1000 message buffer
+            memory_monitoring: false, // Disabled by default
         }
     }
 }
@@ -248,6 +255,29 @@ impl<M: Model> ProgramBuilder<M> {
         self
     }
 
+    /// Sets the event channel buffer size.
+    ///
+    /// By default, the channel has a buffer of 1000 messages. Setting this to `None`
+    /// will use an unbounded channel (not recommended for production), while setting
+    /// it to `Some(size)` will use a bounded channel with the specified buffer size.
+    ///
+    /// # Arguments
+    ///
+    /// * `buffer_size` - The buffer size for the event channel.
+    pub fn event_channel_buffer(mut self, buffer_size: Option<usize>) -> Self {
+        self.config.event_channel_buffer = buffer_size;
+        self
+    }
+
+    /// Enables memory usage monitoring.
+    ///
+    /// When enabled, the program will track memory usage metrics that can be
+    /// accessed for debugging and performance analysis.
+    pub fn memory_monitoring(mut self, enabled: bool) -> Self {
+        self.config.memory_monitoring = enabled;
+        self
+    }
+
     /// Builds the `Program` instance with the configured options.
     ///
     /// # Returns
@@ -265,9 +295,17 @@ impl<M: Model> ProgramBuilder<M> {
 pub struct Program<M: Model> {
     /// The configuration for this `Program` instance.
     pub config: ProgramConfig,
-    event_tx: mpsc::UnboundedSender<Msg>,
-    event_rx: mpsc::UnboundedReceiver<Msg>,
+    event_tx: crate::event::EventSender,
+    event_rx: crate::event::EventReceiver,
     terminal: Option<Box<dyn TerminalInterface + Send>>,
+    /// Active timer handles for cancellation
+    active_timers: HashMap<u64, CancellationToken>,
+    /// Set of spawned tasks that can be cancelled on shutdown
+    task_set: JoinSet<()>,
+    /// Cancellation token for coordinated shutdown
+    shutdown_token: CancellationToken,
+    /// Memory usage monitor (optional)
+    memory_monitor: Option<crate::memory::MemoryMonitor>,
     _phantom: PhantomData<M>,
 }
 
@@ -287,7 +325,13 @@ impl<M: Model> Program<M> {
     ///
     /// A `Result` containing the `Program` instance or an `Error` if initialization fails.
     fn new(config: ProgramConfig) -> Result<Self, Error> {
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let (event_tx, event_rx) = if let Some(buffer_size) = config.event_channel_buffer {
+            let (tx, rx) = mpsc::channel(buffer_size);
+            (crate::event::EventSender::Bounded(tx), crate::event::EventReceiver::Bounded(rx))
+        } else {
+            let (tx, rx) = mpsc::unbounded_channel();
+            (crate::event::EventSender::Unbounded(tx), crate::event::EventReceiver::Unbounded(rx))
+        };
 
         let terminal = if config.without_renderer {
             None
@@ -300,11 +344,21 @@ impl<M: Model> Program<M> {
         // Expose the event sender globally for command helpers
         let _ = crate::event::EVENT_SENDER.set(event_tx.clone());
 
+        let memory_monitor = if config.memory_monitoring {
+            Some(crate::memory::MemoryMonitor::new())
+        } else {
+            None
+        };
+
         Ok(Self {
             config,
             event_tx,
             event_rx,
             terminal,
+            active_timers: HashMap::new(),
+            task_set: JoinSet::new(),
+            shutdown_token: CancellationToken::new(),
+            memory_monitor,
             _phantom: PhantomData,
         })
     }
@@ -372,17 +426,45 @@ impl<M: Model> Program<M> {
             } else {
                 InputHandler::new(self.event_tx.clone())
             };
-            tokio::spawn(async move {
-                let _ = input_handler.run().await;
+            let shutdown_token = self.shutdown_token.clone();
+            
+            // Update memory monitoring
+            if let Some(ref monitor) = self.memory_monitor {
+                monitor.task_spawned();
+            }
+            
+            self.task_set.spawn(async move {
+                tokio::select! {
+                    _ = shutdown_token.cancelled() => {
+                        // Shutdown requested
+                    }
+                    _ = input_handler.run() => {
+                        // Input handler completed
+                    }
+                }
             });
         }
 
         let result = loop {
             if let Some(c) = cmd.take() {
                 let event_tx = self.event_tx.clone();
-                tokio::spawn(async move {
-                    if let Some(msg) = c.await {
-                        let _ = event_tx.send(msg);
+                let shutdown_token = self.shutdown_token.clone();
+                
+                // Update memory monitoring
+                if let Some(ref monitor) = self.memory_monitor {
+                    monitor.task_spawned();
+                }
+                
+                self.task_set.spawn(async move {
+                    tokio::select! {
+                        _ = shutdown_token.cancelled() => {
+                            // Shutdown requested, don't process command
+                        }
+                        result = c => {
+                            if let Some(msg) = result {
+                                let _ = event_tx.send(msg);
+                            }
+                        }
                     }
                 });
             }
@@ -424,17 +506,34 @@ impl<M: Model> Program<M> {
                             if let Ok(every_msg) = msg.downcast::<crate::event::EveryMsgInternal>() {
                                 let duration = every_msg.duration;
                                 let func = every_msg.func;
+                                let cancellation_token = every_msg.cancellation_token.clone();
+                                let timer_id = every_msg.timer_id;
                                 let event_tx = self.event_tx.clone();
+
+                                // Store the cancellation token for this timer
+                                self.active_timers.insert(timer_id, cancellation_token.clone());
+                                
+                                // Update memory monitoring
+                                if let Some(ref monitor) = self.memory_monitor {
+                                    monitor.timer_added();
+                                }
 
                                 tokio::spawn(async move {
                                     let mut ticker = tokio::time::interval(duration);
                                     ticker.tick().await; // First tick completes immediately
 
                                     loop {
-                                        ticker.tick().await;
-                                        let msg = func(duration);
-                                        if event_tx.send(msg).is_err() {
-                                            break; // Receiver dropped
+                                        tokio::select! {
+                                            _ = cancellation_token.cancelled() => {
+                                                // Timer was cancelled
+                                                break;
+                                            }
+                                            _ = ticker.tick() => {
+                                                let msg = func(duration);
+                                                if event_tx.send(msg).is_err() {
+                                                    break; // Receiver dropped
+                                                }
+                                            }
                                         }
                                     }
                                 });
@@ -456,12 +555,41 @@ impl<M: Model> Program<M> {
                                     cmd = Some(crate::command::batch(next_cmds));
                                 }
                             }
+                        } else if msg.is::<crate::event::CancelTimerMsg>() {
+                            if let Ok(cancel_msg) = msg.downcast::<crate::event::CancelTimerMsg>() {
+                                if let Some(token) = self.active_timers.remove(&cancel_msg.timer_id) {
+                                    token.cancel();
+                                    // Update memory monitoring
+                                    if let Some(ref monitor) = self.memory_monitor {
+                                        monitor.timer_removed();
+                                    }
+                                }
+                                continue; // Don't pass this to the model
+                            }
+                        } else if msg.is::<crate::event::CancelAllTimersMsg>() {
+                            // Cancel all active timers
+                            let timer_count = self.active_timers.len();
+                            for (_, token) in self.active_timers.drain() {
+                                token.cancel();
+                            }
+                            // Update memory monitoring
+                            if let Some(ref monitor) = self.memory_monitor {
+                                for _ in 0..timer_count {
+                                    monitor.timer_removed();
+                                }
+                            }
+                            continue; // Don't pass this to the model
                         } else {
                             // Handle regular messages
                             let is_quit = msg.downcast_ref::<QuitMsg>().is_some();
                             cmd = model.update(msg);
                             if is_quit {
                                 should_quit = true;
+                            }
+                            
+                            // Update memory monitoring
+                            if let Some(ref monitor) = self.memory_monitor {
+                                monitor.message_processed();
                             }
                         }
                         if should_quit {
@@ -498,7 +626,32 @@ impl<M: Model> Program<M> {
             let _ = terminal.exit_raw_mode().await;
         }
 
+        // Cleanup: cancel all tasks and wait for them to complete
+        self.cleanup_tasks().await;
+
         result
+    }
+
+    /// Clean up all spawned tasks on program shutdown.
+    async fn cleanup_tasks(&mut self) {
+        // Cancel the shutdown token to signal all tasks to stop
+        self.shutdown_token.cancel();
+        
+        // Cancel all active timers
+        for (_, token) in self.active_timers.drain() {
+            token.cancel();
+        }
+        
+        // Wait for all tasks to complete, with a timeout to avoid hanging
+        let timeout = std::time::Duration::from_millis(500);
+        let _ = tokio::time::timeout(timeout, async {
+            while let Some(_) = self.task_set.join_next().await {
+                // Task completed
+            }
+        }).await;
+        
+        // Abort any remaining tasks that didn't respond to cancellation
+        self.task_set.abort_all();
     }
 
     /// Returns a sender that can be used to send messages to the `Program`'s event loop.
@@ -508,8 +661,8 @@ impl<M: Model> Program<M> {
     ///
     /// # Returns
     ///
-    /// An `mpsc::UnboundedSender<Msg>` that can be used to send messages.
-    pub fn sender(&self) -> mpsc::UnboundedSender<Msg> {
+    /// An `EventSender` that can be used to send messages.
+    pub fn sender(&self) -> crate::event::EventSender {
         self.event_tx.clone()
     }
 
@@ -523,14 +676,28 @@ impl<M: Model> Program<M> {
     ///
     /// # Returns
     ///
-    /// A `Result` indicating success or a `SendError` if the message could not be sent.
+    /// A `Result` indicating success or a channel-related error if the message could not be sent.
     pub fn send(&self, msg: Msg) -> Result<(), Error> {
-        self.event_tx.send(msg).map_err(|_| Error::SendError)
+        self.event_tx.send(msg)
     }
 
     /// Sends a `QuitMsg` to the `Program`'s event loop, initiating a graceful shutdown.
     pub fn quit(&self) {
         let _ = self.event_tx.send(Box::new(QuitMsg));
+    }
+
+    /// Get a reference to the memory monitor, if enabled.
+    ///
+    /// Returns `None` if memory monitoring is disabled.
+    pub fn memory_monitor(&self) -> Option<&crate::memory::MemoryMonitor> {
+        self.memory_monitor.as_ref()
+    }
+
+    /// Get memory usage health information, if monitoring is enabled.
+    ///
+    /// Returns `None` if memory monitoring is disabled.
+    pub fn memory_health(&self) -> Option<crate::memory::MemoryHealth> {
+        self.memory_monitor.as_ref().map(|m| m.check_health())
     }
 
     /// Sends a `QuitMsg` to the `Program`'s event loop, initiating a forceful shutdown.

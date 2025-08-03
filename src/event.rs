@@ -3,8 +3,10 @@
 //! They are typically sent by commands or the input handler.
 
 use std::any::Any;
-use tokio::sync::mpsc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 /// A message represents any event that can trigger a model update.
 ///
@@ -13,9 +15,84 @@ use std::sync::OnceLock;
 /// in defining custom message types for your application.
 pub type Msg = Box<dyn Any + Send>;
 
+/// Event sender abstraction that can be either bounded or unbounded.
+#[derive(Clone)]
+pub enum EventSender {
+    Unbounded(mpsc::UnboundedSender<Msg>),
+    Bounded(mpsc::Sender<Msg>),
+}
+
+impl EventSender {
+    /// Send a message through the channel.
+    pub fn send(&self, msg: Msg) -> Result<(), crate::Error> {
+        match self {
+            // Unbounded send fails only when the receiver is closed.
+            EventSender::Unbounded(tx) => tx
+                .send(msg)
+                .map_err(|_| crate::Error::ChannelClosed),
+            // Bounded send can fail due to Full (backpressure) or Closed.
+            EventSender::Bounded(tx) => tx.try_send(msg).map_err(Into::into),
+        }
+    }
+
+    /// Check if the sender is closed.
+    pub fn is_closed(&self) -> bool {
+        match self {
+            EventSender::Unbounded(tx) => tx.is_closed(),
+            EventSender::Bounded(tx) => tx.is_closed(),
+        }
+    }
+
+    /// Create an EventSender from an UnboundedSender (for backward compatibility).
+    pub fn from_unbounded(tx: mpsc::UnboundedSender<Msg>) -> Self {
+        EventSender::Unbounded(tx)
+    }
+
+    /// Create an EventSender from a bounded Sender (for testing).
+    pub fn from_bounded(tx: mpsc::Sender<Msg>) -> Self {
+        EventSender::Bounded(tx)
+    }
+}
+
+impl From<mpsc::UnboundedSender<Msg>> for EventSender {
+    fn from(tx: mpsc::UnboundedSender<Msg>) -> Self {
+        EventSender::Unbounded(tx)
+    }
+}
+
+impl From<mpsc::Sender<Msg>> for EventSender {
+    fn from(tx: mpsc::Sender<Msg>) -> Self {
+        EventSender::Bounded(tx)
+    }
+}
+
+/// Event receiver abstraction that can be either bounded or unbounded.
+pub enum EventReceiver {
+    Unbounded(mpsc::UnboundedReceiver<Msg>),
+    Bounded(mpsc::Receiver<Msg>),
+}
+
+impl EventReceiver {
+    /// Receive the next message from the channel.
+    pub async fn recv(&mut self) -> Option<Msg> {
+        match self {
+            EventReceiver::Unbounded(rx) => rx.recv().await,
+            EventReceiver::Bounded(rx) => rx.recv().await,
+        }
+    }
+}
+
 /// Global event sender set by Program on startup so commands can emit messages
 /// back into the event loop from background tasks.
-pub static EVENT_SENDER: OnceLock<mpsc::UnboundedSender<Msg>> = OnceLock::new();
+pub static EVENT_SENDER: OnceLock<EventSender> = OnceLock::new();
+
+/// Global timer ID generator for unique timer identification.
+static TIMER_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+/// Generates a unique timer ID.
+pub fn next_timer_id() -> u64 {
+    TIMER_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
+}
 
 /// A message indicating a keyboard input event.
 #[derive(Debug, Clone)]
@@ -157,13 +234,26 @@ pub struct SetWindowTitleMsg(pub String);
 pub struct EveryMsgInternal {
     pub duration: std::time::Duration,
     pub func: Box<dyn Fn(std::time::Duration) -> Msg + Send>,
+    pub cancellation_token: CancellationToken,
+    pub timer_id: u64,
 }
 
 impl std::fmt::Debug for EveryMsgInternal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EveryMsgInternal")
             .field("duration", &self.duration)
+            .field("timer_id", &self.timer_id)
             .field("func", &"<closure>")
             .finish()
     }
 }
+
+/// A message to cancel a specific timer.
+#[derive(Debug, Clone)]
+pub struct CancelTimerMsg {
+    pub timer_id: u64,
+}
+
+/// A message to cancel all active timers.
+#[derive(Debug, Clone)]
+pub struct CancelAllTimersMsg;

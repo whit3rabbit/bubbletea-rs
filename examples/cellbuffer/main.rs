@@ -1,5 +1,5 @@
-use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
 use bubbletea_rs::command::{batch, tick, window_size};
+use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
 use crossterm::event::MouseEventKind;
 use std::time::Duration;
 
@@ -16,13 +16,13 @@ struct FrameMsg;
 struct InitMsg;
 
 fn animate() -> Cmd {
-    tick(Duration::from_millis(1000 / FPS as u64), |_| Box::new(FrameMsg) as Msg)
+    tick(Duration::from_millis(1000 / FPS as u64), |_| {
+        Box::new(FrameMsg) as Msg
+    })
 }
 
 fn init_cmd() -> Cmd {
-    Box::pin(async move {
-        Some(Box::new(InitMsg) as Msg)
-    })
+    Box::pin(async move { Some(Box::new(InitMsg) as Msg) })
 }
 
 #[derive(Debug, Clone)]
@@ -34,7 +34,11 @@ struct Spring {
 
 impl Spring {
     fn new(fps: u32, frequency: f64, damping: f64) -> Self {
-        Self { fps: fps as f64, frequency, damping }
+        Self {
+            fps: fps as f64,
+            frequency,
+            damping,
+        }
     }
 
     // Critically-damped-ish spring integrator similar to harmonica.NewSpring.Update
@@ -57,10 +61,17 @@ struct CellBuffer {
 }
 
 impl CellBuffer {
-    fn new() -> Self { Self { cells: Vec::new(), stride: 0 } }
+    fn new() -> Self {
+        Self {
+            cells: Vec::new(),
+            stride: 0,
+        }
+    }
 
     fn init(&mut self, w: usize, h: usize) {
-        if w == 0 { return; }
+        if w == 0 {
+            return;
+        }
         self.stride = w;
         self.cells = vec![" ".to_string(); w * h];
         self.wipe();
@@ -69,7 +80,9 @@ impl CellBuffer {
     fn set(&mut self, x: isize, y: isize) {
         let w = self.width() as isize;
         let h = self.height() as isize;
-        if x < 0 || y < 0 || x >= w || y >= h { return; }
+        if x < 0 || y < 0 || x >= w || y >= h {
+            return;
+        }
         let i = (y as usize) * self.stride + (x as usize);
         if i < self.cells.len() {
             self.cells[i] = ASTERISK.to_string();
@@ -77,17 +90,25 @@ impl CellBuffer {
     }
 
     fn wipe(&mut self) {
-        for c in &mut self.cells { *c = " ".to_string(); }
+        for c in &mut self.cells {
+            *c = " ".to_string();
+        }
     }
 
-    fn width(&self) -> usize { self.stride }
+    fn width(&self) -> usize {
+        self.stride
+    }
 
     fn height(&self) -> usize {
-        if self.stride == 0 { return 0; }
+        if self.stride == 0 {
+            return 0;
+        }
         self.cells.len() / self.stride
     }
 
-    fn ready(&self) -> bool { !self.cells.is_empty() }
+    fn ready(&self) -> bool {
+        !self.cells.is_empty()
+    }
 }
 
 impl std::fmt::Display for CellBuffer {
@@ -132,7 +153,8 @@ fn draw_ellipse(cb: &mut CellBuffer, xc: f64, yc: f64, rx: f64, ry: f64) {
         }
     }
 
-    d2 = (ry * ry) * ((x + 0.5) * (x + 0.5)) + (rx * rx) * ((y - 1.0) * (y - 1.0)) - (rx * rx * ry * ry);
+    d2 = (ry * ry) * ((x + 0.5) * (x + 0.5)) + (rx * rx) * ((y - 1.0) * (y - 1.0))
+        - (rx * rx * ry * ry);
 
     while y >= 0.0 {
         cb.set((x + xc) as isize, (y + yc) as isize);
@@ -170,25 +192,21 @@ impl Model for CellBufferModel {
         let mut m = Self {
             cells: CellBuffer::new(),
             spring: Spring::new(FPS, 7.5, 0.15),
-            target_x: 40.0,  // Default center position
+            target_x: 40.0, // Default center position
             target_y: 12.0,
             x: 40.0,
             y: 12.0,
             x_vel: 0.0,
             y_vel: 0.0,
         };
-        
+
         // Initialize with default size if terminal size detection fails
         // This ensures the animation works even without WindowSizeMsg
-        m.cells.init(80, 24);  // Common default terminal size
-        
+        m.cells.init(80, 24); // Common default terminal size
+
         // Request window size and schedule first frame
         // Also send an init message to force initial render
-        (m, Some(batch(vec![
-            init_cmd(),
-            window_size(),
-            animate(),
-        ])))
+        (m, Some(batch(vec![init_cmd(), window_size(), animate()])))
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
@@ -196,7 +214,7 @@ impl Model for CellBufferModel {
         if msg.downcast_ref::<InitMsg>().is_some() {
             return None;
         }
-        
+
         if let Some(_k) = msg.downcast_ref::<KeyMsg>() {
             // Any key press quits
             return Some(quit());
@@ -205,9 +223,9 @@ impl Model for CellBufferModel {
         if let Some(ws) = msg.downcast_ref::<bubbletea_rs::WindowSizeMsg>() {
             // Update target to new center if this is the first real size
             let was_default = self.cells.width() == 80 && self.cells.height() == 24;
-            
+
             self.cells.init(ws.width as usize, ws.height as usize);
-            
+
             if was_default {
                 // Move to actual center now that we have real dimensions
                 self.target_x = ws.width as f64 / 2.0;
@@ -219,9 +237,14 @@ impl Model for CellBufferModel {
         }
 
         if let Some(mouse) = msg.downcast_ref::<bubbletea_rs::MouseMsg>() {
-            if !self.cells.ready() { return None; }
+            if !self.cells.ready() {
+                return None;
+            }
             // Support terminals that report only drag/press events in alt screen
-            if matches!(mouse.button, MouseEventKind::Moved | MouseEventKind::Down(_) | MouseEventKind::Drag(_)) {
+            if matches!(
+                mouse.button,
+                MouseEventKind::Moved | MouseEventKind::Down(_) | MouseEventKind::Drag(_)
+            ) {
                 self.target_x = mouse.x as f64;
                 self.target_y = mouse.y as f64;
             }
@@ -229,12 +252,16 @@ impl Model for CellBufferModel {
         }
 
         if msg.downcast_ref::<FrameMsg>().is_some() {
-            if !self.cells.ready() { return Some(animate()); }
+            if !self.cells.ready() {
+                return Some(animate());
+            }
             self.cells.wipe();
             let (nx, nvx) = self.spring.update(self.x, self.x_vel, self.target_x);
             let (ny, nvy) = self.spring.update(self.y, self.y_vel, self.target_y);
-            self.x = nx; self.x_vel = nvx;
-            self.y = ny; self.y_vel = nvy;
+            self.x = nx;
+            self.x_vel = nvx;
+            self.y = ny;
+            self.y_vel = nvy;
             draw_ellipse(&mut self.cells, self.x, self.y, 16.0, 8.0);
             return Some(animate());
         }
@@ -266,7 +293,7 @@ impl Model for CellBufferModel {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use bubbletea_rs::MouseMotion;
-    
+
     // Use alt screen; some terminals (e.g., Ghostty) only send full mouse
     // reporting while in the alternate screen buffer.
     let program = Program::<CellBufferModel>::builder()

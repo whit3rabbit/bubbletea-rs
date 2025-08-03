@@ -76,8 +76,6 @@ impl Model for SimpleModel {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
-
     // Create and run the program with default settings
     let program = Program::<SimpleModel>::builder()
         .signal_handler(true) // Enable Ctrl+C handling

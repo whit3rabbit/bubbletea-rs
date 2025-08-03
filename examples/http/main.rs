@@ -35,11 +35,13 @@ impl Model for HttpModel {
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
             match key_msg.key {
                 KeyCode::Char('q') | KeyCode::Char('c') | KeyCode::Esc => {
-                    if key_msg.key == KeyCode::Char('c') && !key_msg.modifiers.contains(KeyModifiers::CONTROL) {
+                    if key_msg.key == KeyCode::Char('c')
+                        && !key_msg.modifiers.contains(KeyModifiers::CONTROL)
+                    {
                         return None;
                     }
                     return Some(quit());
-                },
+                }
                 _ => return None,
             }
         }
@@ -59,13 +61,13 @@ impl Model for HttpModel {
 
     fn view(&self) -> String {
         let mut s = format!("Checking {}...", URL);
-        
+
         if let Some(error) = &self.error {
             s.push_str(&format!("something went wrong: {}", error));
         } else if let Some(status) = self.status {
             s.push_str(&format!("{} {}", status, status_text(status)));
         }
-        
+
         s.push('\n');
         s
     }
@@ -101,7 +103,7 @@ fn check_server() -> Cmd {
 fn status_text(status: u16) -> &'static str {
     match status {
         200 => "OK",
-        201 => "Created", 
+        201 => "Created",
         204 => "No Content",
         301 => "Moved Permanently",
         302 => "Found",
