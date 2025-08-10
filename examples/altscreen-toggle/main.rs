@@ -8,7 +8,8 @@ use bubbletea_rs::{
     enter_alt_screen, exit_alt_screen, quit, suspend, Cmd, KeyMsg, Model, Msg, Program, QuitMsg,
     ResumeMsg,
 };
-use crossterm::event::{KeyCode, KeyModifiers};
+use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
+use lipgloss_extras::lipgloss::{Color, Style};
 
 // Synthetic message used to trigger the initial render immediately after startup.
 #[derive(Debug)]
@@ -18,11 +19,39 @@ fn init_render_cmd() -> Cmd {
     Box::pin(async { Some(Box::new(InitRenderMsg) as Msg) })
 }
 
+// Key mappings for the altscreen toggle example
+#[derive(Debug)]
+pub struct KeyBindings {
+    pub quit: Binding,
+    pub suspend: Binding,
+    pub toggle: Binding,
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self {
+            quit: new_binding(vec![
+                with_keys_str(&["q", "esc"]),
+                with_help("q/esc", "quit"),
+            ]),
+            suspend: new_binding(vec![
+                with_keys_str(&["ctrl+z"]),
+                with_help("ctrl+z", "suspend"),
+            ]),
+            toggle: new_binding(vec![
+                with_keys_str(&["space"]),
+                with_help("space", "toggle mode"),
+            ]),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct AltScreenModel {
     pub altscreen: bool,
     pub quitting: bool,
     pub suspending: bool,
+    pub keys: KeyBindings,
 }
 
 impl Model for AltScreenModel {
@@ -32,6 +61,7 @@ impl Model for AltScreenModel {
                 altscreen: false,
                 quitting: false,
                 suspending: false,
+                keys: KeyBindings::default(),
             },
             // Trigger an initial render so the view shows immediately on startup.
             Some(init_render_cmd()),
@@ -50,32 +80,27 @@ impl Model for AltScreenModel {
             return None;
         }
 
-        // Keyboard handling
+        // Keyboard handling using key bindings
         if let Some(key) = msg.downcast_ref::<KeyMsg>() {
-            match key.key {
-                KeyCode::Char('q') => {
-                    self.quitting = true;
-                    return Some(quit());
-                }
-                KeyCode::Esc => {
-                    self.quitting = true;
-                    return Some(quit());
-                }
-                KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.suspending = true;
-                    return Some(suspend());
-                }
-                KeyCode::Char(' ') => {
-                    // Toggle alt screen
-                    let cmd = if self.altscreen {
-                        exit_alt_screen()
-                    } else {
-                        enter_alt_screen()
-                    };
-                    self.altscreen = !self.altscreen;
-                    return Some(cmd);
-                }
-                _ => {}
+            if self.keys.quit.matches(key) {
+                self.quitting = true;
+                return Some(quit());
+            }
+            
+            if self.keys.suspend.matches(key) {
+                self.suspending = true;
+                return Some(suspend());
+            }
+            
+            if self.keys.toggle.matches(key) {
+                // Toggle alt screen
+                let cmd = if self.altscreen {
+                    exit_alt_screen()
+                } else {
+                    enter_alt_screen()
+                };
+                self.altscreen = !self.altscreen;
+                return Some(cmd);
             }
         }
 
@@ -95,12 +120,14 @@ impl Model for AltScreenModel {
             return "Bye!\n".to_string();
         }
 
-        // TODO(UX): Use a lipgloss-like styling crate for Rust (when available)
-        // to render the mode label with foreground/background colors and tint
-        // the help text, matching the Go example:
-        //   - keywordStyle: fg=204, bg=235 for the " altscreen mode "/" inline mode " label
-        //   - helpStyle:    fg=241 for the help line
-        // For now we keep plain text to avoid adding ad-hoc ANSI styling.
+        // Create lipgloss-extras styles matching the Go example
+        let keyword_style = Style::new()
+            .foreground(Color::from("204"))
+            .background(Color::from("235"));
+        
+        let help_style = Style::new()
+            .foreground(Color::from("241"));
+        
         let mode = if self.altscreen {
             " altscreen mode "
         } else {
@@ -109,7 +136,8 @@ impl Model for AltScreenModel {
 
         format!(
             "\n\n  You're in {}\n\n\n{}\n",
-            mode, "  space: switch modes • ctrl-z: suspend • q: exit"
+            keyword_style.render(mode),
+            help_style.render("  space: switch modes • ctrl-z: suspend • q: exit")
         )
     }
 }

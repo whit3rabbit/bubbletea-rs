@@ -26,7 +26,13 @@ members = [
     "examples/autocomplete",
     "examples/cellbuffer",
     "examples/timer",
+    "examples/timer-advanced",
 ]
+
+[patch.crates-io]
+# Ensure all workspace crates and external dependencies (like bubbletea-widgets)
+# use this local instance of `bubbletea-rs` to avoid duplicate crate types.
+bubbletea-rs = { path = "." }
 
 [package]
 name = "bubbletea-rs"

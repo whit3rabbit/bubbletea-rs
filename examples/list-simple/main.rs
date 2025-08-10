@@ -1,199 +1,194 @@
-//! List Simple Example
-//!
-//! Demonstrates:
-//! - Basic list navigation with up/down arrow keys
-//! - Item selection with Enter key
-//! - Simple list display with numbering
-//! - Selection highlighting and cursor movement
-//! - Quit options (q key or Ctrl+C)
-//!
-//! This example shows a simple dinner selection menu with basic list functionality.
-
-use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
+use bubbletea_rs::{Cmd, KeyMsg, Model as BubbleTeaModel, Msg, WindowSizeMsg};
+use bubbletea_widgets::list::{Item, ItemDelegate, Model as List};
 use crossterm::event::{KeyCode, KeyModifiers};
+use lipgloss_extras::lipgloss::{Color, Style};
+use std::fmt::Display;
 
-/// Represents a list item
-#[derive(Debug, Clone, PartialEq)]
-pub struct ListItem {
-    pub title: String,
+// Synthetic message used to trigger the initial render immediately after startup.
+struct InitRenderMsg;
+
+fn init_render_cmd() -> Cmd {
+    Box::pin(async { Some(Box::new(InitRenderMsg) as Msg) })
 }
 
-impl ListItem {
-    pub fn new(title: &str) -> Self {
+// Simple item type (equivalent to Go's item string)
+#[derive(Debug, Clone)]
+struct FoodItem(String);
+
+impl Display for FoodItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Item for FoodItem {
+    fn filter_value(&self) -> String {
+        self.0.clone()
+    }
+}
+
+// Custom delegate that matches the Go version exactly
+#[derive(Debug, Clone)]
+struct FoodDelegate {
+    item_style: Style,
+    selected_item_style: Style,
+}
+
+impl Default for FoodDelegate {
+    fn default() -> Self {
         Self {
-            title: title.to_string(),
+            item_style: Style::new().padding_left(4),
+            selected_item_style: Style::new()
+                .padding_left(2)
+                .foreground(Color::from("170")),
         }
     }
 }
 
-/// The application state
-#[derive(Debug)]
-pub struct ListSimpleModel {
-    pub items: Vec<ListItem>,
-    pub cursor: usize,
-    pub selected: Option<usize>,
-    pub choice: Option<String>,
-    pub quitting: bool,
-    pub height: usize,
-}
+impl ItemDelegate<FoodItem> for FoodDelegate {
+    fn render(&self, m: &List<FoodItem>, index: usize, item: &FoodItem) -> String {
+        let str = format!("{}. {}", index + 1, item.0);
 
-impl ListSimpleModel {
-    pub fn new(items: Vec<ListItem>) -> Self {
-        Self {
-            items,
-            cursor: 0,
-            selected: None,
-            choice: None,
-            quitting: false,
-            height: 14,
-        }
-    }
-
-    pub fn move_cursor_up(&mut self) {
-        if self.cursor > 0 {
-            self.cursor -= 1;
-        }
-    }
-
-    pub fn move_cursor_down(&mut self) {
-        if self.cursor < self.items.len().saturating_sub(1) {
-            self.cursor += 1;
-        }
-    }
-
-    pub fn select_current(&mut self) {
-        if self.cursor < self.items.len() {
-            self.selected = Some(self.cursor);
-            self.choice = Some(self.items[self.cursor].title.clone());
-        }
-    }
-
-    pub fn render_item(&self, index: usize, item: &ListItem) -> String {
-        let number = index + 1;
-        let title = &item.title;
-
-        if index == self.cursor {
-            format!("  > {}. {}", number, title)
+        if index == m.cursor() {
+            self.selected_item_style.render(&format!("> {}", str))
         } else {
-            format!("    {}. {}", number, title)
+            self.item_style.render(&str)
         }
+    }
+
+    fn height(&self) -> usize {
+        1 // Each item takes exactly 1 line
+    }
+
+    fn spacing(&self) -> usize {
+        0 // No spacing between items
+    }
+
+    fn update(&self, _msg: &Msg, _m: &mut List<FoodItem>) -> Option<Cmd> {
+        None
     }
 }
 
-impl Model for ListSimpleModel {
-    fn init() -> (Self, Option<Cmd>) {
+// Main application model
+struct Model {
+    list: List<FoodItem>,
+    choice: Option<String>,
+    quitting: bool,
+}
+
+impl Model {
+    fn new() -> Self {
         let items = vec![
-            ListItem::new("Ramen"),
-            ListItem::new("Tomato Soup"),
-            ListItem::new("Grilled Cheese"),
-            ListItem::new("Burger"),
-            ListItem::new("Pizza"),
-            ListItem::new("Tacos"),
-            ListItem::new("Pasta"),
-            ListItem::new("Salad"),
-            ListItem::new("Sushi"),
-            ListItem::new("Curry"),
+            FoodItem("Ramen".to_string()),
+            FoodItem("Tomato Soup".to_string()),
+            FoodItem("Hamburgers".to_string()),
+            FoodItem("Cheeseburgers".to_string()),
+            FoodItem("Currywurst".to_string()),
+            FoodItem("Okonomiyaki".to_string()),
+            FoodItem("Pasta".to_string()),
+            FoodItem("Fillet Mignon".to_string()),
+            FoodItem("Caviar".to_string()),
+            FoodItem("Just Wine".to_string()),
         ];
 
-        let model = ListSimpleModel::new(items);
-        (model, None)
+        let delegate = FoodDelegate::default();
+        let mut list = List::new(items, delegate, 80, 30) // Much larger dimensions to force vertical
+            .with_title("What do you want for dinner?");
+
+        // Note: Filtering behavior will be handled by the widget defaults
+
+        // Configure list styles to match Go example exactly
+        let title_style = Style::new().margin_left(2);
+        let pagination_style = Style::new().padding_left(4);
+        let help_style = Style::new().padding_left(4).padding_bottom(1);
+
+        list.styles.title = title_style;
+        list.styles.pagination_style = pagination_style;
+        list.styles.help_style = help_style;
+
+        Self {
+            list,
+            choice: None,
+            quitting: false,
+        }
+    }
+}
+
+impl BubbleTeaModel for Model {
+    fn init() -> (Self, Option<Cmd>) {
+        let model = Self::new();
+        (model, Some(init_render_cmd()))
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
-        // If we have a selection or are quitting, only handle quit
-        if self.selected.is_some() || self.quitting {
-            if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-                match key_msg.key {
-                    KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
-                        return Some(quit());
-                    }
-                    KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
-                        return Some(quit());
-                    }
-                    _ => {
-                        return Some(quit());
-                    }
-                }
-            }
+        // Handle initial render message
+        if msg.downcast_ref::<InitRenderMsg>().is_some() {
+            // Just trigger a render, no state change needed
+            return None;
+        }
+        
+        // Handle window size changes
+        if let Some(_size_msg) = msg.downcast_ref::<WindowSizeMsg>() {
+            // List widget handles resizing internally
             return None;
         }
 
-        // Handle keyboard input for navigation
+        // Handle key messages
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            match key_msg.key {
-                KeyCode::Char('q') | KeyCode::Char('Q') => {
+            match &key_msg.key {
+                KeyCode::Char('q') => {
                     self.quitting = true;
+                    return Some(bubbletea_rs::quit());
                 }
                 KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
                     self.quitting = true;
-                }
-                KeyCode::Esc => {
-                    self.quitting = true;
-                }
-                KeyCode::Up => {
-                    self.move_cursor_up();
-                }
-                KeyCode::Down => {
-                    self.move_cursor_down();
+                    return Some(bubbletea_rs::quit());
                 }
                 KeyCode::Enter => {
-                    self.select_current();
+                    if let Some(item) = self.list.selected_item() {
+                        self.choice = Some(item.0.clone());
+                    }
+                    return Some(bubbletea_rs::quit());
                 }
                 _ => {}
             }
         }
 
-        None
+        // Delegate to list for navigation
+        self.list.update(msg)
     }
 
     fn view(&self) -> String {
-        // If we made a selection, show the choice
-        if let Some(ref choice) = self.choice {
-            return format!("You chose {}.\n\nPress any key to quit.", choice);
-        }
+        let quit_text_style = Style::new().margin(1, 0, 2, 4);
 
-        // If we're quitting without selection
+        if let Some(choice) = &self.choice {
+            return quit_text_style.render(&format!("{}? Sounds good to me.", choice));
+        }
         if self.quitting {
-            return "Goodbye!\n\nPress any key to quit.".to_string();
+            return quit_text_style.render("Not hungry? That's cool.");
         }
 
-        // Show the list
-        let mut view = String::new();
-
-        // Title
-        view.push_str("  What do you want for dinner?\n\n");
-
-        // List items
-        for (index, item) in self.items.iter().enumerate() {
-            view.push_str(&self.render_item(index, item));
-            view.push('\n');
-        }
-
-        // Help text
-        view.push_str("\n  Use ↑/↓ to navigate, Enter to select, q to quit\n");
-
-        view
+        format!("\n{}", self.list.view())
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Starting list-simple example...");
+    // Try to ensure clean terminal state
+    crossterm::terminal::enable_raw_mode()?;
 
-    // Create and run the program
-    let program = Program::<ListSimpleModel>::builder()
-        .alt_screen(true) // Use alternate screen for cleaner display
-        .signal_handler(true) // Enable Ctrl+C handling
-        .build()?;
+    let result = {
+        let program = bubbletea_rs::Program::<Model>::builder()
+            .alt_screen(false) // Disable alt_screen to help with layout
+            .signal_handler(true)
+            .build()?;
 
-    // Run the program and get the final model state
-    let final_model = program.run().await?;
+        program.run().await
+    };
 
-    if let Some(ref choice) = final_model.choice {
-        println!("You selected: {}", choice);
-    } else if final_model.quitting {
-        println!("No selection made.");
-    }
+    // Always restore terminal state, even on error
+    let _ = crossterm::terminal::disable_raw_mode();
 
+    result?;
     Ok(())
 }

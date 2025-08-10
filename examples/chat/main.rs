@@ -1,225 +1,165 @@
-use bubbletea_rs::command::{batch, tick, window_size};
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
-use crossterm::style::Stylize; // for simple coloring; TODO(lipgloss): replace with lipgloss styles
-use std::fmt::Write as _;
+use bubbletea_widgets::{textinput, viewport};
+use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
+use lipgloss_extras::lipgloss::{Color, Style};
 
-// Port of Bubble Tea's chat example.
-// - Uses a viewport area for messages and a simple textarea for input.
-// - TODO(lipgloss): Apply lipgloss styles (placeholder dark gray, sender label bright pink)
-// - TODO(lipgloss): Respect dynamic width with style.Width(viewport_width) wrapping.
+// Port of Bubble Tea's chat example using bubbletea-widgets `viewport` and `textarea`.
 
-const GAP: &str = "\n\n"; // matches the Go example
+const GAP: &str = "\n\n"; // matches the Go example (2 blank lines)
+const WELCOME_TEXT: &str = "Welcome to the chat room!\nType a message and press Enter to send.";
 
-// Cursor blink timing
-const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(530);
-
-#[derive(Debug, Clone)]
-struct BlinkMsg;
-
-use std::time::Duration;
-
-// Error handling - matches Go version but not actively used in this example
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-struct ErrMsg(String);
-
-#[derive(Debug, Default, Clone)]
-struct TextArea {
-    value: String,
-    placeholder: String,
-    width: usize,
-    height: usize,
-    prompt: String,
-    char_limit: usize,
-    cursor_visible: bool,
-    focused: bool,
-}
-
-impl TextArea {
-    fn new() -> Self {
-        Self {
-            placeholder: "Send a message...".into(),
-            width: 30,
-            height: 3,
-            prompt: "┃ ".into(),
-            char_limit: 280,
-            cursor_visible: true,
-            focused: true,
-            ..Default::default()
-        }
-    }
-    fn set_width(&mut self, w: usize) {
-        self.width = w;
-    }
-    fn set_height(&mut self, h: usize) {
-        self.height = h;
-    }
-    fn reset(&mut self) {
-        self.value.clear();
-    }
-    fn view(&self) -> String {
-        let mut out = String::new();
-        // Show placeholder when input is empty (even if focused), like the Go example,
-        // and render it in dark gray to appear subtle.
-        if self.value.is_empty() {
-            let _ = write!(
-                &mut out,
-                "{}{}",
-                self.prompt,
-                self.placeholder.clone().dark_grey()
-            );
-        } else {
-            let _ = write!(&mut out, "{}{}", self.prompt, self.value);
-        }
-        // Add cursor if focused and visible
-        if self.focused && self.cursor_visible {
-            out.push('█');
-        }
-        out
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-struct Viewport {
-    width: usize,
-    height: usize,
-    content: String,
-    scroll: usize,
-}
-
-impl Viewport {
-    fn new(width: usize, height: usize) -> Self {
-        Self {
-            width,
-            height,
-            ..Default::default()
-        }
-    }
-    fn set_content(&mut self, s: String) {
-        self.content = s;
-    }
-    fn goto_bottom(&mut self) {
-        self.scroll = usize::MAX;
-    }
-    fn view(&self) -> String {
-        // Just return the content; wrapping is handled by the model when setting content.
-        self.content.clone()
-    }
-}
-
-// (no custom WindowSizeMsg needed; we use bubbletea_rs::WindowSizeMsg)
-
+// Key mappings for the chat example
 #[derive(Debug)]
+pub struct KeyBindings {
+    pub quit: Binding,
+    pub quit_alt: Binding,
+    pub send: Binding,
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self {
+            quit: new_binding(vec![
+                with_keys_str(&["esc"]),
+                with_help("esc", "quit"),
+            ]),
+            quit_alt: new_binding(vec![
+                with_keys_str(&["ctrl+c"]),
+                with_help("ctrl+c", "quit"),
+            ]),
+            send: new_binding(vec![
+                with_keys_str(&["enter"]),
+                with_help("enter", "send message"),
+            ]),
+        }
+    }
+}
+
 struct ChatModel {
-    viewport: Viewport,
-    textarea: TextArea,
+    viewport: viewport::Model,
+    textinput: textinput::Model,
     messages: Vec<String>,
-    // TODO(lipgloss): senderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
+    sender_style: Style,
+    keys: KeyBindings,
+    // Track terminal size for wrapping
+    term_width: usize,
+    term_height: usize,
+    input_height: usize,
 }
 
 impl Model for ChatModel {
     fn init() -> (Self, Option<Cmd>) {
-        let mut ta = TextArea::new();
-        ta.set_width(30);
-        ta.set_height(3);
+        let mut ti = textinput::new();
+        ti.set_placeholder("Send a message...");
+        ti.prompt = "┃ ".to_string();
+        ti.set_width(30);
+        ti.set_char_limit(280);
+        // Focus so typing works immediately
+        let _ = ti.focus();
 
-        let mut vp = Viewport::new(30, 5);
-        vp.set_content("Welcome to the chat room!\nType a message and press Enter to send.".into());
+        // Use reasonable defaults for initial terminal size - WindowSizeMsg will update these
+        let (initial_width, initial_height) = (80usize, 24usize);
+
+        ti.set_width((initial_width.saturating_sub(2)) as i32); // Account for prompt
+
+        // Compute initial viewport height and initialize viewport content
+        let gap_h = GAP.matches('\n').count();
+        let input_height = 1; // textinput is single-line
+        let vp_height = initial_height
+            .saturating_sub(input_height)
+            .saturating_sub(gap_h)
+            .max(1);
+        let mut vp = viewport::new(initial_width, vp_height);
+        vp.set_content(WELCOME_TEXT);
+
+        let sender_style = Style::new().foreground(Color::from("5"));
+
+        // Also request an async window size update for environments where the
+        // initial synchronous size isn't available or later changes occur.
+        let window_size_cmd = bubbletea_rs::command::window_size();
 
         (
             Self {
                 viewport: vp,
-                textarea: ta,
+                textinput: ti,
                 messages: vec![],
+                sender_style,
+                keys: KeyBindings::default(),
+                term_width: initial_width,
+                term_height: initial_height,
+                input_height: 1,
             },
-            Some(batch(vec![
-                window_size(),
-                tick(CURSOR_BLINK_INTERVAL, |_| Box::new(BlinkMsg) as Msg),
-            ])),
+            Some(window_size_cmd),
         )
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
-        let mut cmds = Vec::new();
-
-        // Handle blink message
-        if msg.downcast_ref::<BlinkMsg>().is_some() {
-            self.textarea.cursor_visible = !self.textarea.cursor_visible;
-            cmds.push(tick(CURSOR_BLINK_INTERVAL, |_| Box::new(BlinkMsg) as Msg));
-        }
-
+        // Window size: update layout and recompute content wrapping
         if let Some(ws) = msg.downcast_ref::<bubbletea_rs::WindowSizeMsg>() {
-            self.viewport.width = ws.width as usize;
-            self.textarea.set_width(ws.width as usize);
-            // Height calculation: viewport fills remaining space above textarea and gap.
-            let gap_h = GAP.matches('\n').count() + 1; // approx lipgloss.Height(gap)
-            self.viewport.height = (ws.height as usize)
-                .saturating_sub(self.textarea.height)
+            self.term_width = ws.width as usize;
+            self.term_height = ws.height as usize;
+
+            // Resize the textinput to full width minus prompt
+            self.textinput.set_width((self.term_width.saturating_sub(2)) as i32);
+
+            // Recreate viewport with new size: height = terminal - input height - gap
+            let gap_h = GAP.matches('\n').count();
+            let input_h = self.input_height;
+            let vp_height = self
+                .term_height
+                .saturating_sub(input_h)
                 .saturating_sub(gap_h);
-            // Recompute wrapped viewport content at the new width
-            self.recompute_viewport_content();
-            self.viewport.goto_bottom();
-            return if cmds.is_empty() {
-                None
+            let mut new_vp = viewport::new(self.term_width, vp_height.max(1));
+            // Keep welcome text until first message is sent; otherwise render wrapped messages
+            if self.messages.is_empty() {
+                new_vp.set_content(WELCOME_TEXT);
             } else {
-                Some(batch(cmds))
-            };
+                let content = self.compute_wrapped_content(self.term_width, vp_height.max(1));
+                new_vp.set_content(&content);
+            }
+            new_vp.goto_bottom();
+            self.viewport = new_vp;
+            return None;
         }
 
+        // Intercept app-level keys first
         if let Some(k) = msg.downcast_ref::<KeyMsg>() {
-            use crossterm::event::{KeyCode, KeyModifiers};
-            use crossterm::style::Stylize;
-            match k.key {
-                KeyCode::Esc => {
-                    // Match Go example: print textarea value on quit
-                    println!("{}", self.textarea.value);
-                    return Some(quit());
-                }
-                KeyCode::Enter => {
-                    // Colorize the "You:" label (bright pink approximation)
-                    let sender = "You: ".magenta().bold().to_string();
-                    let line = format!("{}{}", sender, self.textarea.value);
+            if self.keys.quit.matches(k) || self.keys.quit_alt.matches(k) {
+                println!("{}", self.textinput.value());
+                return Some(quit());
+            }
+            
+            if self.keys.send.matches(k) {
+                let value = self.textinput.value();
+                if !value.trim().is_empty() {
+                    let sender = self.sender_style.render("You: ");
+                    let line = format!("{}{}", sender, value);
                     self.messages.push(line);
-                    // Re-wrap to current viewport width
-                    self.recompute_viewport_content();
-                    self.textarea.reset();
+
+                    // Re-wrap and update viewport content
+                    let height = self.viewport_height_current();
+                    let content = self.compute_wrapped_content(self.term_width, height);
+                    self.viewport.set_content(&content);
                     self.viewport.goto_bottom();
-                    return None;
+
+                    // Clear textinput content
+                    self.textinput.set_value("");
                 }
-                KeyCode::Backspace => {
-                    self.textarea.value.pop();
-                    return None;
-                }
-                KeyCode::Char(ch) => {
-                    // Detect Ctrl+C (quit)
-                    if ch == 'c' && k.modifiers.contains(KeyModifiers::CONTROL) {
-                        println!("{}", self.textarea.value);
-                        return Some(quit());
-                    }
-                    if self.textarea.value.len() < self.textarea.char_limit {
-                        self.textarea.value.push(ch);
-                    }
-                    return None;
-                }
-                _ => {}
+                return None;
             }
         }
 
-        if cmds.is_empty() {
-            None
-        } else {
-            Some(batch(cmds))
-        }
+        // Delegate to textinput only; viewport content is managed by this model
+        self.textinput.update(msg)
     }
 
     fn view(&self) -> String {
-        format!("{}{}{}", self.viewport.view(), GAP, self.textarea.view())
+        format!("{}{}{}", self.viewport.view(), GAP, self.textinput.view())
     }
 }
 
 impl ChatModel {
-    fn recompute_viewport_content(&mut self) {
-        let width = self.viewport.width.max(1);
+    fn compute_wrapped_content(&self, width: usize, height: usize) -> String {
         let wrapped_lines: Vec<String> = self
             .messages
             .iter()
@@ -230,11 +170,18 @@ impl ChatModel {
                     .collect::<Vec<_>>()
             })
             .collect();
-
-        // Keep only the bottom-most lines that fit in height to mimic viewport bottom behavior
-        let start = wrapped_lines.len().saturating_sub(self.viewport.height);
+        let start = wrapped_lines.len().saturating_sub(height);
         let visible = &wrapped_lines[start..];
-        self.viewport.set_content(visible.join("\n"));
+        visible.join("\n")
+    }
+
+    fn viewport_height_current(&self) -> usize {
+        // Derive current viewport height from terminal and input
+        let gap_h = GAP.matches('\n').count();
+        self.term_height
+            .saturating_sub(self.input_height)
+            .saturating_sub(gap_h)
+            .max(1)
     }
 }
 

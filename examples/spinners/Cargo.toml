@@ -9,6 +9,7 @@ path = "main.rs"
 
 [dependencies]
 bubbletea-rs = { path = "../.." }
+bubbletea-widgets = "0.1.6"
 crossterm = "0.29"
 rand = "0.9.2"
 tokio = { version = "1.0", features = ["full"] }

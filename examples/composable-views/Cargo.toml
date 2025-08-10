@@ -11,3 +11,5 @@ path = "main.rs"
 bubbletea-rs = { path = "../.." }
 crossterm = "0.29"
 tokio = { version = "1", features = ["full"] }
+bubbletea-widgets = "0.1.6"
+lipgloss-extras = { version = "0.0.8", features = ["full"] }

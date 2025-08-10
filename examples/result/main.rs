@@ -10,7 +10,7 @@
 //! and see the result of their selection.
 
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
-use crossterm::event::KeyCode;
+use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
 
 /// Represents the different menu options available
 #[derive(Debug, Clone, PartialEq)]
@@ -41,12 +41,45 @@ impl Choice {
     }
 }
 
+/// Key bindings for the result example
+#[derive(Debug)]
+pub struct KeyBindings {
+    pub quit: Binding,
+    pub up: Binding,
+    pub down: Binding,
+    pub select: Binding,
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self {
+            quit: new_binding(vec![
+                with_keys_str(&["q", "esc"]),
+                with_help("q/esc", "quit"),
+            ]),
+            up: new_binding(vec![
+                with_keys_str(&["up"]),
+                with_help("↑", "move up"),
+            ]),
+            down: new_binding(vec![
+                with_keys_str(&["down"]),
+                with_help("↓", "move down"),
+            ]),
+            select: new_binding(vec![
+                with_keys_str(&["enter"]),
+                with_help("enter", "select"),
+            ]),
+        }
+    }
+}
+
 /// The application state
 #[derive(Debug)]
 pub struct ResultModel {
     pub choices: Vec<Choice>,
     pub cursor: usize,
     pub selected: Option<Choice>,
+    pub keys: KeyBindings,
 }
 
 impl Model for ResultModel {
@@ -60,6 +93,7 @@ impl Model for ResultModel {
             ],
             cursor: 0,
             selected: None,
+            keys: KeyBindings::default(),
         };
         (model, None)
     }
@@ -67,45 +101,36 @@ impl Model for ResultModel {
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         // If a selection has been made, only allow quitting
         if self.selected.is_some() {
-            if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-                match key_msg.key {
-                    KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
-                        return Some(quit());
-                    }
-                    _ => {
-                        return Some(quit()); // Any key quits after selection
-                    }
-                }
+            if msg.downcast_ref::<KeyMsg>().is_some() {
+                // Any key quits after selection
+                return Some(quit());
             }
             return None;
         }
 
-        // Handle keyboard input for menu navigation
+        // Handle keyboard input for menu navigation using key bindings
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            match key_msg.key {
-                KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
+            if self.keys.quit.matches(key_msg) {
+                return Some(quit());
+            }
+            if self.keys.up.matches(key_msg) {
+                if self.cursor > 0 {
+                    self.cursor -= 1;
+                }
+            }
+            if self.keys.down.matches(key_msg) {
+                if self.cursor < self.choices.len() - 1 {
+                    self.cursor += 1;
+                }
+            }
+            if self.keys.select.matches(key_msg) {
+                // Make a selection
+                self.selected = Some(self.choices[self.cursor].clone());
+
+                // If "Exit" was selected, quit immediately
+                if self.selected == Some(Choice::Option4) {
                     return Some(quit());
                 }
-                KeyCode::Up => {
-                    if self.cursor > 0 {
-                        self.cursor -= 1;
-                    }
-                }
-                KeyCode::Down => {
-                    if self.cursor < self.choices.len() - 1 {
-                        self.cursor += 1;
-                    }
-                }
-                KeyCode::Enter => {
-                    // Make a selection
-                    self.selected = Some(self.choices[self.cursor].clone());
-
-                    // If "Exit" was selected, quit immediately
-                    if self.selected == Some(Choice::Option4) {
-                        return Some(quit());
-                    }
-                }
-                _ => {}
             }
         }
 

@@ -12,7 +12,7 @@
 //! loading indicators available in terminal applications.
 
 use bubbletea_rs::{quit, tick, Cmd, KeyMsg, Model, Msg, Program};
-use crossterm::event::{KeyCode, KeyModifiers};
+use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
 use std::time::Duration;
 
 /// Message for spinner animation ticks
@@ -132,6 +132,38 @@ impl SpinnerStyle {
     }
 }
 
+/// Key bindings for the spinners example
+#[derive(Debug)]
+pub struct KeyBindings {
+    pub quit: Binding,
+    pub quit_alt: Binding,
+    pub left: Binding,
+    pub right: Binding,
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self {
+            quit: new_binding(vec![
+                with_keys_str(&["q", "esc"]),
+                with_help("q", "quit"),
+            ]),
+            quit_alt: new_binding(vec![
+                with_keys_str(&["ctrl+c"]),
+                with_help("ctrl+c", "quit"),
+            ]),
+            left: new_binding(vec![
+                with_keys_str(&["left", "h"]),
+                with_help("h/←", "previous spinner"),
+            ]),
+            right: new_binding(vec![
+                with_keys_str(&["right", "l"]),
+                with_help("l/→", "next spinner"),
+            ]),
+        }
+    }
+}
+
 /// The application state
 #[derive(Debug)]
 pub struct SpinnersModel {
@@ -139,6 +171,7 @@ pub struct SpinnersModel {
     pub current_index: usize,
     pub current_frame: usize,
     pub quitting: bool,
+    pub keys: KeyBindings,
 }
 
 impl SpinnersModel {
@@ -148,6 +181,7 @@ impl SpinnersModel {
             current_index: 0,
             current_frame: 0,
             quitting: false,
+            keys: KeyBindings::default(),
         }
     }
 
@@ -200,30 +234,23 @@ impl Model for SpinnersModel {
             }
         }
 
-        // Handle keyboard input
+        // Handle keyboard input using key bindings
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            match key_msg.key {
-                KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.quitting = true;
-                    return Some(quit());
-                }
-                KeyCode::Char('q') | KeyCode::Esc => {
-                    self.quitting = true;
-                    return Some(quit());
-                }
-                KeyCode::Left | KeyCode::Char('h') => {
-                    self.previous_spinner();
-                    // Restart animation with new spinner's interval
-                    let interval = self.current_spinner().interval();
-                    return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
-                }
-                KeyCode::Right | KeyCode::Char('l') => {
-                    self.next_spinner();
-                    // Restart animation with new spinner's interval
-                    let interval = self.current_spinner().interval();
-                    return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
-                }
-                _ => {}
+            if self.keys.quit.matches(key_msg) || self.keys.quit_alt.matches(key_msg) {
+                self.quitting = true;
+                return Some(quit());
+            }
+            if self.keys.left.matches(key_msg) {
+                self.previous_spinner();
+                // Restart animation with new spinner's interval
+                let interval = self.current_spinner().interval();
+                return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
+            }
+            if self.keys.right.matches(key_msg) {
+                self.next_spinner();
+                // Restart animation with new spinner's interval
+                let interval = self.current_spinner().interval();
+                return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
             }
         }
 

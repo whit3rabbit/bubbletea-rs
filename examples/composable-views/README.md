@@ -20,9 +20,9 @@ This example demonstrates how to compose multiple sub-models (timer and spinner)
 
 ## Notes
 
-This is a Rust port of the original Go example. Some styling features from lipgloss are approximated using crossterm:
-- Border colors use crossterm's RGB colors instead of lipgloss Color("69")
-- Manual border drawing replaces lipgloss border styles
-- Text centering is calculated manually
+This is a Rust port of the original Go example using lipgloss-extras for styling:
+- Uses lipgloss-extras Color("69") for focused border colors
+- Spinner styling with lipgloss-extras color highlighting
+- Help text styled with lipgloss-extras Color("241")
 
-TODO comments in the code indicate where lipgloss styling would be used in the original.
+The example demonstrates proper lipgloss-extras integration for terminal UI styling.

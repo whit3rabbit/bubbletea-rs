@@ -2,12 +2,49 @@
 name = "list-default-example"
 version = "0.1.0"
 edition = "2021"
+default-run = "list-default"
 
 [[bin]]
 name = "list-default"
 path = "main.rs"
 
+[[bin]]
+name = "debug-filter"
+path = "debug_filter.rs"
+
+[[bin]]
+name = "debug-filter-v2"
+path = "debug_filter_v2.rs"
+
+[[bin]]
+name = "debug-interactive"
+path = "debug_interactive.rs"
+
+[[bin]]
+name = "debug-simple"
+path = "debug_simple.rs"
+
+[[bin]]
+name = "debug-filter-scope"
+path = "debug_filter_scope.rs"
+
+[[bin]]
+name = "debug-filter-clear"
+path = "debug_filter_clear.rs"
+
+# Disabled old debug tools that use workaround logic
+# [[bin]]
+# name = "debug-final-test"  
+# path = "debug_final_test.rs"
+
+[[bin]]
+name = "test-v016-api"
+path = "test_v016_api.rs"
+
 [dependencies]
 bubbletea-rs = { path = "../.." }
+bubbletea-widgets = "0.1.6"
+lipgloss-extras = { version = "0.0.8", features = ["full"] }
 crossterm = "0.29"
 tokio = { version = "1.0", features = ["full"] }
+strip-ansi-escapes = "0.2"

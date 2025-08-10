@@ -1,198 +1,217 @@
 //! Timer Example
 //!
-//! Mirrors `bubbletea/examples/timer/main.go` behavior:
-//! - 5s countdown that starts automatically
-//! - Toggle start/stop with 's'
+//! A direct port of the Go Bubble Tea timer example demonstrating:
+//! - `bubbletea-widgets::timer` for precise countdown timers
+//! - `bubbletea-widgets::key` for organized key binding management  
+//! - Help system integration matching Go's bubbles/help behavior
+//! - Automatic timer timeout and quit functionality
+//!
+//! This example closely mirrors `bubbletea/examples/timer/main.go` behavior:
+//! - 5s countdown that starts automatically with millisecond precision
+//! - Toggle start/stop with 's' (key binding changes based on state)
 //! - Reset to full timeout with 'r'
-//! - Quit with 'q', Esc, or Ctrl+C
-//! - Renders remaining time and help text
+//! - Quit with 'q' or Ctrl+C
+//! - Automatic quit when timer reaches zero
 
-use bubbletea_rs::{quit, tick, Cmd, KeyMsg, Model, Msg, Program};
-use crossterm::event::{KeyCode, KeyModifiers};
-use std::time::{Duration, Instant};
+use bubbletea_rs::{quit, Cmd, KeyMsg, Model as BubbleTeaModel, Msg, Program};
+use bubbletea_widgets::key::{new_binding, with_keys_str, with_help, Binding};
+use bubbletea_widgets::timer::{new_with_interval, Model as TimerModel, TimeoutMsg, TickMsg, StartStopMsg};
+use std::time::Duration;
 
-/// Total timeout duration (5 seconds)
 const TIMEOUT: Duration = Duration::from_secs(5);
-/// Tick interval (1 millisecond) to match Go example
-const INTERVAL: Duration = Duration::from_millis(1);
 
-#[derive(Debug)]
-struct TimerTickMsg;
+/// Formats a duration to match Go's time.Duration.String() format exactly
+fn format_duration_like_go(d: Duration) -> String {
+    let total_nanos = d.as_nanos();
 
-#[derive(Debug)]
-pub struct TimerModel {
-    remaining: Duration,
-    running: bool,
+    if total_nanos == 0 {
+        return "0s".to_string();
+    }
+
+    if total_nanos >= 1_000_000_000 {
+        // Seconds or more
+        let secs = d.as_secs_f64();
+        if secs >= 60.0 {
+            let minutes = (secs / 60.0) as u64;
+            let remaining_secs = secs % 60.0;
+            if remaining_secs == 0.0 {
+                format!("{}m", minutes)
+            } else {
+                format!("{}m{:.0}s", minutes, remaining_secs)
+            }
+        } else if secs >= 1.0 {
+            // For the timer example, we want to show seconds with 3 decimal places for precision
+            // This matches the Go timer example which shows "4.999s", "4.998s", etc.
+            format!("{:.3}s", secs)
+        } else {
+            format!("{:.3}s", secs)
+        }
+    } else if total_nanos >= 1_000_000 {
+        // Milliseconds
+        format!("{}ms", d.as_millis())
+    } else if total_nanos >= 1_000 {
+        // Microseconds
+        format!("{}µs", d.as_micros())
+    } else {
+        // Nanoseconds
+        format!("{}ns", total_nanos)
+    }
+}
+
+/// Main model matching Go's model struct
+pub struct Model {
+    timer: TimerModel,
+    keymap: Keymap,
     quitting: bool,
-    last_tick: Option<Instant>,
 }
 
-impl TimerModel {
-    fn new() -> Self {
+/// Key bindings struct matching Go's keymap
+pub struct Keymap {
+    pub start: Binding,
+    pub stop: Binding,  
+    pub reset: Binding,
+    pub quit: Binding,
+}
+
+impl Keymap {
+    pub fn new() -> Self {
         Self {
-            remaining: TIMEOUT,
-            running: true, // starts immediately like the Go example
-            quitting: false,
-            last_tick: None,
+            start: new_binding(vec![
+                with_keys_str(&["s"]),
+                with_help("s", "start"),
+            ]),
+            stop: new_binding(vec![
+                with_keys_str(&["s"]),
+                with_help("s", "stop"),
+            ]),
+            reset: new_binding(vec![
+                with_keys_str(&["r"]),
+                with_help("r", "reset"),
+            ]),
+            quit: new_binding(vec![
+                with_keys_str(&["q", "ctrl+c"]),
+                with_help("q", "quit"),
+            ]),
         }
-    }
-
-    fn start(&mut self) -> Option<Cmd> {
-        if !self.running && self.remaining > Duration::ZERO {
-            self.running = true;
-            self.last_tick = Some(Instant::now());
-            return Some(Self::tick_cmd());
-        }
-        None
-    }
-
-    fn stop(&mut self) -> Option<Cmd> {
-        if self.running {
-            self.running = false;
-        }
-        None
-    }
-
-    fn toggle(&mut self) -> Option<Cmd> {
-        if self.running {
-            self.stop()
-        } else {
-            self.start()
-        }
-    }
-
-    fn reset(&mut self) -> Option<Cmd> {
-        self.remaining = TIMEOUT;
-        // If we were running, keep running. If stopped, stay stopped.
-        // Do not schedule an extra tick here; normal loop will continue.
-        None
-    }
-
-    fn tick_cmd() -> Cmd {
-        tick(INTERVAL, |_| Box::new(TimerTickMsg) as Msg)
-    }
-
-    fn on_tick(&mut self) -> Option<Cmd> {
-        if !self.running || self.remaining == Duration::ZERO {
-            return None;
-        }
-
-        let now = Instant::now();
-        let elapsed = match self.last_tick {
-            Some(prev) => now.saturating_duration_since(prev),
-            None => INTERVAL,
-        };
-        self.last_tick = Some(now);
-
-        // Subtract elapsed; clamp at zero
-        if elapsed >= self.remaining {
-            self.remaining = Duration::ZERO;
-        } else {
-            self.remaining -= elapsed;
-        }
-
-        if self.remaining == Duration::ZERO {
-            // Timeout reached: quit
-            self.quitting = true;
-            return Some(quit());
-        }
-
-        // Schedule next tick while running
-        Some(Self::tick_cmd())
-    }
-
-    fn timed_out(&self) -> bool {
-        self.remaining == Duration::ZERO
-    }
-
-    fn view_time(&self) -> String {
-        // Render like a simple timer: seconds.milliseconds with left padding similar to Go's view
-        let secs = self.remaining.as_secs();
-        let millis = (self.remaining.subsec_millis()) as u64;
-        format!("{:>2}.{:03}s", secs, millis)
     }
 }
 
-impl Model for TimerModel {
+impl Model {
+    pub fn new() -> Self {
+        let mut keymap = Keymap::new();
+        
+        // Match Go's initial state: start is disabled since timer starts running
+        keymap.start.set_enabled(false);
+        
+        Self {
+            // Match Go's NewWithInterval(timeout, time.Millisecond) 
+            timer: new_with_interval(TIMEOUT, Duration::from_millis(1)),
+            keymap,
+            quitting: false,
+        }
+    }
+
+    fn help_view(&self) -> String {
+        // Match Go's help.ShortHelpView behavior
+        let bindings = vec![
+            &self.keymap.start,
+            &self.keymap.stop, 
+            &self.keymap.reset,
+            &self.keymap.quit,
+        ];
+        
+        // Filter enabled bindings (matching Go's behavior)
+        let enabled_bindings: Vec<&Binding> = bindings
+            .into_iter()
+            .filter(|b| b.enabled())
+            .collect();
+            
+        let help_items: Vec<String> = enabled_bindings
+            .iter()
+            .map(|binding| {
+                let help = binding.help();
+                format!("{} {}", help.key, help.desc)
+            })
+            .collect();
+            
+        format!("\n{}", help_items.join(" • "))
+    }
+}
+
+impl BubbleTeaModel for Model {
     fn init() -> (Self, Option<Cmd>) {
-        let mut m = TimerModel::new();
-        // Start ticking immediately if running
-        m.last_tick = Some(Instant::now());
-        let cmd = if m.running {
-            Some(TimerModel::tick_cmd())
-        } else {
-            None
-        };
-        (m, cmd)
+        let model = Self::new();
+        // Match Go's m.timer.Init()
+        let cmd = model.timer.init();
+        (model, Some(cmd))
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
-        // Tick
-        if msg.downcast_ref::<TimerTickMsg>().is_some() {
-            return self.on_tick();
+        // Handle timer messages (matching Go's switch cases)
+        
+        // timer.TickMsg case
+        if let Some(_tick_msg) = msg.downcast_ref::<TickMsg>() {
+            return self.timer.update(msg);
         }
-
-        // Keyboard handling
+        
+        // timer.StartStopMsg case  
+        if let Some(_start_stop_msg) = msg.downcast_ref::<StartStopMsg>() {
+            let cmd = self.timer.update(msg);
+            // Match Go's key enabling logic
+            self.keymap.stop.set_enabled(self.timer.running());
+            self.keymap.start.set_enabled(!self.timer.running());
+            return cmd;
+        }
+        
+        // timer.TimeoutMsg case
+        if let Some(_timeout_msg) = msg.downcast_ref::<TimeoutMsg>() {
+            self.quitting = true;
+            return Some(quit());
+        }
+        
+        // tea.KeyMsg case
         if let Some(key) = msg.downcast_ref::<KeyMsg>() {
-            match key.key {
-                KeyCode::Char('q') | KeyCode::Esc => {
-                    self.quitting = true;
-                    return Some(quit());
-                }
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.quitting = true;
-                    return Some(quit());
-                }
-                KeyCode::Char('r') => {
-                    self.reset();
-                }
-                KeyCode::Char('s') => {
-                    return self.toggle();
-                }
-                _ => {}
+            if self.keymap.quit.matches(key) {
+                self.quitting = true;
+                return Some(quit());
+            } else if self.keymap.reset.matches(key) {
+                // Match Go's m.timer.Timeout = timeout
+                self.timer.timeout = TIMEOUT;
+            } else if self.keymap.start.matches(key) || self.keymap.stop.matches(key) {
+                // Match Go's m.timer.Toggle()
+                return Some(self.timer.toggle());
             }
         }
-
+        
         None
     }
 
     fn view(&self) -> String {
-        let mut s = if self.timed_out() {
-            "All done!".to_string()
+        // Match Go's View() method exactly
+        
+        // For a more detailed timer view you could read m.timer.Timeout to get  
+        // the remaining time as a time.Duration and skip calling m.timer.View()
+        // entirely.
+        let mut s = if self.timer.timedout() {
+            "All done! Press 'r' to reset".to_string()
         } else {
-            self.view_time()
+            // Use custom formatting to ensure correct display
+            format_duration_like_go(self.timer.timeout)
         };
+        
         s.push('\n');
+        
         if !self.quitting {
-            s = format!("Exiting in {}\n{}", s, self.help_view());
+            s = format!("Exiting in {}{}", s, self.help_view());
         }
+        
         s
-    }
-}
-
-impl TimerModel {
-    fn help_view(&self) -> String {
-        // We don't have the bubbles help/keymap port yet, so render a simple help line
-        // Start is disabled while running (mirrors Go's enabled state semantics)
-        let start_label = if self.running { "start" } else { "start" }; // label remains 'start'
-        let stop_label = if self.running { "stop" } else { "stop" };
-        let mut keys = vec![format!(
-            "s {}",
-            if self.running {
-                stop_label
-            } else {
-                start_label
-            }
-        )];
-        keys.push("r reset".into());
-        keys.push("q quit".into());
-        format!("  {}", keys.join(" • "))
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let program = Program::<TimerModel>::builder()
+    let program = Program::<Model>::builder()
         .signal_handler(true)
         .build()?;
 

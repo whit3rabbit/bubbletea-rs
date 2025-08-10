@@ -12,9 +12,10 @@
 //! each component independently.
 
 use bubbletea_rs::{batch, quit, tick, Cmd, KeyMsg, Model, Msg, Program};
-use crossterm::event::{KeyCode, KeyModifiers};
-use crossterm::style::{style, Stylize};
-use std::time::{Duration, Instant};
+use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
+
+use lipgloss_extras::lipgloss::{Color, Style};
+use std::time::Duration;
 
 /// Message for timer ticks
 #[derive(Debug)]
@@ -23,6 +24,38 @@ struct TimerTickMsg;
 /// Message for spinner animation ticks
 #[derive(Debug)]
 struct SpinnerTickMsg;
+
+/// Key bindings for the composable views example
+#[derive(Debug)]
+pub struct KeyBindings {
+    pub quit: Binding,
+    pub quit_alt: Binding,
+    pub tab: Binding,
+    pub new: Binding,
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self {
+            quit: new_binding(vec![
+                with_keys_str(&["q"]),
+                with_help("q", "quit"),
+            ]),
+            quit_alt: new_binding(vec![
+                with_keys_str(&["ctrl+c"]),
+                with_help("ctrl+c", "quit"),
+            ]),
+            tab: new_binding(vec![
+                with_keys_str(&["tab"]),
+                with_help("tab", "focus next"),
+            ]),
+            new: new_binding(vec![
+                with_keys_str(&["n"]),
+                with_help("n", "new"),
+            ]),
+        }
+    }
+}
 
 /// Tracks which model has focus
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -95,7 +128,6 @@ struct TimerModel {
     duration: Duration,
     remaining: Duration,
     running: bool,
-    last_tick: Option<Instant>,
 }
 
 impl TimerModel {
@@ -103,28 +135,20 @@ impl TimerModel {
         Self {
             duration,
             remaining: duration,
-            running: true, // Start automatically like Go example
-            last_tick: None,
+            running: true,
         }
     }
 
     fn tick(&mut self) {
-        if !self.running || self.remaining == Duration::ZERO {
+        if !self.running {
             return;
         }
-
-        let now = Instant::now();
-        let elapsed = match self.last_tick {
-            Some(prev) => now.saturating_duration_since(prev),
-            None => Duration::from_secs(1), // First tick
-        };
-        self.last_tick = Some(now);
-
-        // Subtract elapsed time
-        if elapsed >= self.remaining {
-            self.remaining = Duration::ZERO;
-        } else {
-            self.remaining -= elapsed;
+        
+        if self.remaining > Duration::ZERO {
+            self.remaining = self.remaining.saturating_sub(Duration::from_secs(1));
+            if self.remaining == Duration::ZERO {
+                self.running = false;
+            }
         }
     }
 
@@ -135,7 +159,6 @@ impl TimerModel {
     fn reset(&mut self) {
         self.remaining = self.duration;
         self.running = true;
-        self.last_tick = Some(Instant::now());
     }
 
     fn view(&self) -> String {
@@ -176,8 +199,10 @@ impl SpinnerModel {
 
     fn view(&self) -> String {
         let frames = self.spinner_type.frames();
-        // TODO: Apply lipgloss spinner style with color #69 (currently using crossterm blue)
-        style(frames[self.frame]).blue().to_string()
+        // Use lipgloss-extras spinner style with color #69
+        Style::new()
+            .foreground(Color::from("69"))
+            .render(frames[self.frame])
     }
 }
 
@@ -187,7 +212,7 @@ struct MainModel {
     state: SessionState,
     timer: TimerModel,
     spinner: SpinnerModel,
-    timer_started: bool,
+    keys: KeyBindings,
 }
 
 impl MainModel {
@@ -196,7 +221,7 @@ impl MainModel {
             state: SessionState::TimerView,
             timer: TimerModel::new(Duration::from_secs(60)),
             spinner: SpinnerModel::new(),
-            timer_started: false,
+            keys: KeyBindings::default(),
         }
     }
 
@@ -207,222 +232,150 @@ impl MainModel {
         }
     }
 
-    /// Render a view with border
+    /// Render a view with border and centered content (simplified manual approach)
     fn render_view(&self, content: &str, width: usize, height: usize, focused: bool) -> String {
-        // TODO: Use lipgloss for proper styling
-        // Currently implementing manual borders
-        let border_color = if focused {
-            // TODO: lipgloss Color("69") - using blue for now
-            crossterm::style::Color::Rgb {
-                r: 105,
-                g: 105,
-                b: 255,
-            }
-        } else {
-            crossterm::style::Color::Reset
-        };
-
-        let mut result = String::new();
-
-        // Calculate padding for centering content
-        let content_lines: Vec<&str> = content.lines().collect();
-        let content_height = content_lines.len();
-        let vertical_padding = (height.saturating_sub(content_height + 2)) / 2;
-
         if focused {
-            // Draw top border
-            result.push_str(
-                &style(format!("┌{}┐", "─".repeat(width - 2)))
-                    .with(border_color)
-                    .to_string(),
-            );
-            result.push('\n');
-
-            // Add top padding
-            for _ in 0..vertical_padding {
-                result.push_str(
-                    &style(format!("│{}│", " ".repeat(width - 2)))
-                        .with(border_color)
-                        .to_string(),
-                );
-                result.push('\n');
+            // Create a bordered box manually for focused view
+            let border_color = Color::from("69");
+            let top_border = Style::new().foreground(border_color.clone()).render(&format!("┌{}┐", "─".repeat(width - 2)));
+            let bottom_border = Style::new().foreground(border_color.clone()).render(&format!("└{}┘", "─".repeat(width - 2)));
+            
+            let mut lines = vec![top_border];
+            
+            // Add vertical padding and center the content
+            let padding_top = (height - 3) / 2; // -3 for top, content, bottom borders
+            for _ in 0..padding_top {
+                let line = Style::new().foreground(border_color.clone()).render(&format!("│{}│", " ".repeat(width - 2)));
+                lines.push(line);
             }
-
-            // Draw content with borders
-            for line in content_lines {
-                let content_width = line.chars().count();
-                let left_padding = (width.saturating_sub(content_width + 2)) / 2;
-                let right_padding = width.saturating_sub(content_width + left_padding + 2);
-
-                result.push_str(&style("│").with(border_color).to_string());
-                result.push_str(&" ".repeat(left_padding));
-                result.push_str(line);
-                result.push_str(&" ".repeat(right_padding));
-                result.push_str(&style("│").with(border_color).to_string());
-                result.push('\n');
+            
+            // Center the content line
+            let content_width = content.len();
+            let left_pad = if content_width >= width.saturating_sub(2) { 0 } else { (width - 2 - content_width) / 2 };
+            let right_pad = width.saturating_sub(2).saturating_sub(content_width).saturating_sub(left_pad);
+            let content_line = format!(
+                "{}{}{}{}",
+                Style::new().foreground(border_color.clone()).render("│"),
+                " ".repeat(left_pad),
+                content,
+                " ".repeat(right_pad)
+            ) + &Style::new().foreground(border_color.clone()).render("│");
+            lines.push(content_line);
+            
+            // Fill remaining vertical space
+            let remaining_height = height.saturating_sub(lines.len()).saturating_sub(1); // -1 for bottom border
+            for _ in 0..remaining_height {
+                let line = Style::new().foreground(border_color.clone()).render(&format!("│{}│", " ".repeat(width - 2)));
+                lines.push(line);
             }
-
-            // Add bottom padding
-            for _ in 0..(height.saturating_sub(content_height + vertical_padding + 2)) {
-                result.push_str(
-                    &style(format!("│{}│", " ".repeat(width - 2)))
-                        .with(border_color)
-                        .to_string(),
-                );
-                result.push('\n');
-            }
-
-            // Draw bottom border
-            result.push_str(
-                &style(format!("└{}┘", "─".repeat(width - 2)))
-                    .with(border_color)
-                    .to_string(),
-            );
+            
+            lines.push(bottom_border);
+            lines.join("\n")
         } else {
-            // No border for unfocused view
+            // No border, just center the content
+            let mut lines = Vec::new();
+            let padding_top = (height - 1) / 2;
+            
             // Add top padding
-            for _ in 0..vertical_padding {
-                result.push_str(&" ".repeat(width));
-                result.push('\n');
+            for _ in 0..padding_top {
+                lines.push(" ".repeat(width));
             }
-
-            // Draw content centered
-            for line in content_lines {
-                let content_width = line.chars().count();
-                let left_padding = (width.saturating_sub(content_width)) / 2;
-                let right_padding = width.saturating_sub(content_width + left_padding);
-
-                result.push_str(&" ".repeat(left_padding));
-                result.push_str(line);
-                result.push_str(&" ".repeat(right_padding));
-                result.push('\n');
+            
+            // Center content
+            let content_width = content.len();
+            let left_pad = if content_width >= width { 0 } else { (width - content_width) / 2 };
+            let right_pad = width.saturating_sub(content_width).saturating_sub(left_pad);
+            lines.push(format!("{}{}{}", " ".repeat(left_pad), content, " ".repeat(right_pad)));
+            
+            // Fill remaining space
+            let remaining = height.saturating_sub(lines.len());
+            for _ in 0..remaining {
+                lines.push(" ".repeat(width));
             }
-
-            // Add bottom padding
-            for _ in 0..(height.saturating_sub(content_height + vertical_padding)) {
-                result.push_str(&" ".repeat(width));
-                result.push('\n');
-            }
+            
+            lines.join("\n")
         }
-
-        result
     }
 
-    /// Join two views horizontally
-    fn join_horizontal(&self, left: &str, right: &str) -> String {
-        let left_lines: Vec<&str> = left.lines().collect();
-        let right_lines: Vec<&str> = right.lines().collect();
-        let max_lines = left_lines.len().max(right_lines.len());
 
-        let mut result = String::new();
-        for i in 0..max_lines {
-            if i < left_lines.len() {
-                result.push_str(left_lines[i]);
-            } else {
-                result.push_str(&" ".repeat(15)); // Width of the box
-            }
-
-            if i < right_lines.len() {
-                result.push_str(right_lines[i]);
-            }
-
-            if i < max_lines - 1 {
-                result.push('\n');
-            }
-        }
-
-        result
-    }
 }
 
 impl Model for MainModel {
     fn init() -> (Self, Option<Cmd>) {
-        let mut model = MainModel::new();
-        // Don't start timer yet; start spinner independently to avoid batch gating
-        model.timer.last_tick = None;
-
+        let model = MainModel::new();
+        
+        // Use tick() re-arming pattern like the Go example
+        let timer_cmd = tick(Duration::from_secs(1), |_| {
+            Box::new(TimerTickMsg) as Msg
+        });
         let spinner_cmd = tick(model.spinner.spinner_type.interval(), |_| {
             Box::new(SpinnerTickMsg) as Msg
         });
-
-        (model, Some(spinner_cmd))
+        
+        (model, Some(batch(vec![timer_cmd, spinner_cmd])))
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
-        let mut cmds = Vec::new();
-
+        let mut cmds: Vec<Cmd> = Vec::new();
+        
         // Handle keyboard input
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            match key_msg.key {
-                KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
-                    return Some(quit());
-                }
-                KeyCode::Char('q') => {
-                    return Some(quit());
-                }
-                KeyCode::Tab => {
-                    // Toggle focus between views
-                    self.state = match self.state {
-                        SessionState::TimerView => SessionState::SpinnerView,
-                        SessionState::SpinnerView => SessionState::TimerView,
-                    };
-                }
-                KeyCode::Char('n') => {
-                    // Context-aware 'n' key handling
-                    match self.state {
-                        SessionState::TimerView => {
-                            // Reset timer
-                            self.timer.reset();
-                            // Ensure timer ticking resumes after reset
-                            cmds.push(tick(Duration::from_secs(1), |_| {
-                                Box::new(TimerTickMsg) as Msg
-                            }));
-                            self.timer_started = true;
-                        }
-                        SessionState::SpinnerView => {
-                            // Next spinner style
-                            self.spinner.next_spinner();
-                            // Continue spinner ticking with the new interval
-                            cmds.push(tick(self.spinner.spinner_type.interval(), |_| {
-                                Box::new(SpinnerTickMsg) as Msg
-                            }));
-                        }
+            if self.keys.quit.matches(key_msg) {
+                return Some(quit());
+            } else if self.keys.quit_alt.matches(key_msg) {
+                return Some(quit());
+            } else if self.keys.tab.matches(key_msg) {
+                // Toggle focus between views
+                self.state = match self.state {
+                    SessionState::TimerView => SessionState::SpinnerView,
+                    SessionState::SpinnerView => SessionState::TimerView,
+                };
+            } else if self.keys.new.matches(key_msg) {
+                // Context-aware 'n' key handling
+                match self.state {
+                    SessionState::TimerView => {
+                        // Reset timer and immediately start new countdown
+                        self.timer.reset();
+                        cmds.push(tick(Duration::from_secs(1), |_| {
+                            Box::new(TimerTickMsg) as Msg
+                        }));
+                    }
+                    SessionState::SpinnerView => {
+                        // Change spinner style and immediately start with new interval
+                        self.spinner.next_spinner();
+                        cmds.push(tick(self.spinner.spinner_type.interval(), |_| {
+                            Box::new(SpinnerTickMsg) as Msg
+                        }));
                     }
                 }
-                _ => {}
             }
         }
 
-        // Handle timer ticks
+        // Handle timer ticks - re-arm for next tick
         if msg.downcast_ref::<TimerTickMsg>().is_some() {
+            self.timer.tick();
+            // Only re-arm if timer is still running
             if !self.timer.is_done() {
-                self.timer.tick();
-                // Schedule next timer tick (one-shot)
                 cmds.push(tick(Duration::from_secs(1), |_| {
                     Box::new(TimerTickMsg) as Msg
                 }));
-                self.timer_started = true;
             }
         }
 
-        // Handle spinner ticks
+        // Handle spinner ticks - always re-arm for continuous animation
         if msg.downcast_ref::<SpinnerTickMsg>().is_some() {
             self.spinner.tick();
-            // Kick off timer ticking the first time we see spinner progress
-            if !self.timer_started {
-                cmds.push(tick(Duration::from_secs(1), |_| {
-                    Box::new(TimerTickMsg) as Msg
-                }));
-                self.timer_started = true;
-            }
-            // Schedule next spinner tick (one-shot) with current interval
+            // Re-arm with current interval (allows dynamic speed changes)
             cmds.push(tick(self.spinner.spinner_type.interval(), |_| {
                 Box::new(SpinnerTickMsg) as Msg
             }));
         }
 
+        // Return commands
         if cmds.is_empty() {
             None
+        } else if cmds.len() == 1 {
+            Some(cmds.into_iter().next().unwrap())
         } else {
             Some(batch(cmds))
         }
@@ -443,20 +396,27 @@ impl Model for MainModel {
             self.state == SessionState::SpinnerView,
         );
 
-        let mut result = String::new();
-        result.push_str(&self.join_horizontal(&timer_view, &spinner_view));
-        result.push('\n');
+        // Manual horizontal join since lipgloss-extras join_horizontal API is unclear
+        let timer_lines: Vec<&str> = timer_view.lines().collect();
+        let spinner_lines: Vec<&str> = spinner_view.lines().collect();
+        let max_lines = timer_lines.len().max(spinner_lines.len());
+        
+        let mut result_lines = Vec::new();
+        for i in 0..max_lines {
+            let timer_line = timer_lines.get(i).unwrap_or(&"");
+            let spinner_line = spinner_lines.get(i).unwrap_or(&"");
+            result_lines.push(format!("{}{}", timer_line, spinner_line));
+        }
+        let views = result_lines.join("\n");
 
-        // Help text
-        // TODO: Apply lipgloss helpStyle with Color("241")
-        let help = format!(
+        // Help text with styling matching Go version helpStyle with Color("241")
+        let help_style = Style::new().foreground(Color::from("241"));
+        let help = help_style.render(&format!(
             "tab: focus next • n: new {} • q: exit",
             self.current_focused_model()
-        );
-        result.push_str(&style(help).dark_grey().to_string());
-        result.push('\n');
+        ));
 
-        result
+        format!("{}\n{}\n", views, help)
     }
 }
 
@@ -464,8 +424,8 @@ impl Model for MainModel {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create and run the program
     let program = Program::<MainModel>::builder()
-        .alt_screen(true)
-        .signal_handler(true)
+        .alt_screen(false) // Match Go version - no alternate screen
+        .signal_handler(true) // Enable Ctrl+C handling
         .build()?;
 
     program.run().await?;

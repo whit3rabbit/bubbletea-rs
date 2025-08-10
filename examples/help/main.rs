@@ -12,7 +12,7 @@
 
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
 use crossterm::event::KeyCode;
-use crossterm::style::{Color, Stylize};
+use lipgloss_extras::lipgloss::{Color, Style};
 use crossterm::terminal;
 use std::env;
 use unicode_width::UnicodeWidthStr;
@@ -339,11 +339,7 @@ impl Model for HelpModel {
         let status = if let Some(ref last_key) = self.last_key {
             format!(
                 "You chose: {}",
-                last_key.clone().with(Color::Rgb {
-                    r: 255,
-                    g: 117,
-                    b: 183
-                })
+                Style::new().foreground(Color::from("#FF75B7")).render(last_key)
             )
         } else {
             "Waiting for input...".to_string()

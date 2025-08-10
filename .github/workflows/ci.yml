@@ -49,7 +49,7 @@ jobs:
         run: cargo check --lib --all-features
 
       - name: Run doctests
-        run: cargo test --doc --lib --all-features
+        run: cargo test --doc --all-features
 
       - name: Run tests
         run: cargo test --lib --all-features

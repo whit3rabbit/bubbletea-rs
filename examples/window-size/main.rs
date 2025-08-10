@@ -10,7 +10,24 @@
 //! them in real-time when the terminal is resized.
 
 use bubbletea_rs::{quit, window_size, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
-use crossterm::event::KeyCode;
+use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
+
+/// Key bindings for the window-size example
+#[derive(Debug)]
+pub struct KeyBindings {
+    pub quit: Binding,
+}
+
+impl Default for KeyBindings {
+    fn default() -> Self {
+        Self {
+            quit: new_binding(vec![
+                with_keys_str(&["q", "esc"]),
+                with_help("any key", "quit"),
+            ]),
+        }
+    }
+}
 
 /// The model holds the current terminal dimensions
 #[derive(Debug)]
@@ -18,6 +35,7 @@ pub struct WindowSizeModel {
     pub width: u16,
     pub height: u16,
     pub ready: bool, // Whether we've received initial size
+    pub keys: KeyBindings,
 }
 
 impl Model for WindowSizeModel {
@@ -27,6 +45,7 @@ impl Model for WindowSizeModel {
             width: 0,
             height: 0,
             ready: false,
+            keys: KeyBindings::default(),
         };
 
         // Immediately request the current window size
@@ -35,20 +54,9 @@ impl Model for WindowSizeModel {
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
-        // Handle keyboard input
-        if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            match key_msg.key {
-                KeyCode::Char('q') | KeyCode::Char('Q') => {
-                    return Some(quit());
-                }
-                KeyCode::Esc => {
-                    return Some(quit());
-                }
-                // Any other key should also quit for this simple example
-                _ => {
-                    return Some(quit());
-                }
-            }
+        // Handle keyboard input - any key quits
+        if let Some(_key_msg) = msg.downcast_ref::<KeyMsg>() {
+            return Some(quit());
         }
 
         // Handle window size messages (including resize events)

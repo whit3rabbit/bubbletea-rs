@@ -1,220 +1,397 @@
-# Chat Example (bubbletea-rs)
+# Chat Example
 
-A Rust port of Bubble Tea’s chat example using a minimal viewport + textarea implementation. It demonstrates:
+A terminal-based chat interface built with bubbletea-rs, demonstrating how to create a scrollable message view with text input.
 
-- A scroll-to-bottom message viewport
-- A simple input line with prompt and character limit
-- Width-aware wrapping on the viewport content
-- Resize handling to keep layout consistent
+![Chat Demo](./chat.gif)
 
-## Run
+## Features
 
-From the repo root:
+- 📜 **Scrollable message viewport** - Displays chat history with automatic scroll-to-bottom
+- ⌨️ **Single-line text input** - With placeholder text "Send a message..."
+- 📱 **Responsive layout** - Automatically adjusts to terminal size changes
+- 🎨 **Styled messages** - Sender labels with custom colors
+- ↩️ **Smart text wrapping** - Messages wrap to fit terminal width
+
+## Running the Example
 
 ```bash
-cargo run -p chat-example --bin chat
+# From the repository root
+cargo run --example chat
+
+# Or from this directory
+cargo run
 ```
 
-Quit with Esc or Ctrl+C (prints the current input before exiting, matching the Go example).
+### Controls
+- **Type** to compose a message
+- **Enter** to send the message
+- **Esc** or **Ctrl+C** to quit
 
-## Layout
+## Implementation Guide
 
-The layout mirrors the Go example:
+### Core Components
+
+This example uses two main widgets from `bubbletea-widgets`:
+
+1. **`viewport::Model`** - Displays scrollable message history
+2. **`textinput::Model`** - Handles user input with placeholder text
+
+### Setting Up the Text Input
+
+```rust
+use bubbletea_widgets::textinput;
+
+// Initialize with placeholder and prompt
+let mut input = textinput::new();
+input.set_placeholder("Send a message...");
+input.prompt = "┃ ".to_string();  // Vertical bar prompt
+input.set_char_limit(280);         // Optional character limit
+input.set_width(terminal_width as i32);
+
+// Focus to enable immediate typing
+let _ = input.focus();
+```
+
+### Creating the Message Viewport
+
+```rust
+use bubbletea_widgets::viewport;
+
+// Calculate viewport height (terminal height - input - gap)
+let viewport_height = terminal_height
+    .saturating_sub(1)  // Input height
+    .saturating_sub(2)  // Gap between viewport and input
+    .max(1);
+
+let mut vp = viewport::new(terminal_width, viewport_height);
+vp.set_content("Welcome to the chat!");
+```
+
+### Layout Structure
+
+The layout consists of three parts:
 
 ```
-+-------------------- viewport (fills available height) --------------------+
-| [wrapped messages, width-aware]                                           |
-| ...                                                                       |
-+---------------------------------------------------------------------------+
-
-
-┃ [input line with placeholder or text]
+┌─────────────── Viewport ───────────────┐
+│ Welcome to the chat!                   │
+│ You: Hello, world!                     │
+│ You: How are you today?                │
+└─────────────────────────────────────────┘
+                                          
+                                          
+┃ Send a message...                       
 ```
 
-- The viewport height is computed as: `window_height - textarea_height - gap_height`.
-- `gap` is two newlines ("\n\n") between the viewport and the textarea.
-- Width is shared: both viewport and textarea use the terminal width.
+The gap between viewport and input is created with two newlines (`\n\n`).
 
-## Resizing
+### Handling Messages
 
-On startup, we request the terminal window size and then listen for `WindowSizeMsg` to recompute sizes:
+```rust
+impl Model for ChatModel {
+    fn update(&mut self, msg: Msg) -> Option<Cmd> {
+        if let Some(key) = msg.downcast_ref::<KeyMsg>() {
+            match key.key {
+                KeyCode::Enter => {
+                    let value = self.textinput.value();
+                    if !value.trim().is_empty() {
+                        // Add message with styled sender
+                        let sender = Style::new()
+                            .foreground(Color::from("5"))
+                            .render("You: ");
+                        self.messages.push(format!("{}{}", sender, value));
+                        
+                        // Update viewport with wrapped content
+                        let content = self.wrap_messages();
+                        self.viewport.set_content(&content);
+                        self.viewport.goto_bottom();
+                        
+                        // Clear input
+                        self.textinput.set_value("");
+                    }
+                    return None;
+                }
+                _ => {}
+            }
+        }
+        
+        // Pass other messages to textinput
+        self.textinput.update(msg)
+    }
+}
+```
 
-1) Update viewport width and textarea width to `msg.width`.
-2) Compute viewport height: `msg.height - textarea.height - gap_height`.
-3) Re-wrap message content to the new viewport width.
-4) Keep the viewport scrolled to the bottom.
+### Responsive Resizing
 
-This follows the Go example’s flow: adjusting widths and heights and then wrapping with Lip Gloss’ width setting before calling `viewport.SetContent`.
+Handle terminal resize events to maintain layout:
 
-## Width-aware wrapping
+```rust
+if let Some(ws) = msg.downcast_ref::<WindowSizeMsg>() {
+    // Update input width
+    self.textinput.set_width((ws.width - 2) as i32);
+    
+    // Recalculate viewport dimensions
+    let viewport_height = ws.height
+        .saturating_sub(1)  // Input height
+        .saturating_sub(2); // Gap
+    
+    // Recreate viewport with new size
+    let mut new_vp = viewport::new(ws.width, viewport_height);
+    new_vp.set_content(&self.wrap_messages());
+    new_vp.goto_bottom();
+    self.viewport = new_vp;
+}
+```
 
-In the Go example, wrapping is applied with `lipgloss.NewStyle().Width(vp.Width)`. In this Rust port we implement a simple word-wrapping helper that:
+### Text Wrapping
 
-- Splits on whitespace
-- Wraps at the current viewport width
-- Hard-wraps long words that exceed the width
-- Preserves line breaks in the source strings
+Implement word wrapping for long messages:
 
-We then take only the bottom-most lines that fit in the viewport height to emulate a "stick-to-bottom" behavior.
+```rust
+fn wrap_text(text: &str, width: usize) -> String {
+    let mut lines = Vec::new();
+    for paragraph in text.split('\n') {
+        let mut line = String::new();
+        for word in paragraph.split_whitespace() {
+            if line.len() + word.len() + 1 > width {
+                lines.push(std::mem::take(&mut line));
+            }
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+        }
+        lines.push(line);
+    }
+    lines.join("\n")
+}
+```
 
-If you replace this wrapper with a preferred text layout library (or a Lip Gloss port), wire it into `recompute_viewport_content`.
+## Multi-line Text Input
 
-## Input handling
+If you need multi-line input (like Slack or Discord), you can use `textarea` instead:
 
-- Enter sends the message as `"You: " + input`, appends to the model’s `messages`, re-wraps and scrolls to bottom.
-- Backspace deletes a character.
-- Ctrl+C or Esc: prints the current input and quits (like the Go example).
+### Using TextArea for Multi-line Input
 
-## Styling
+```rust
+use bubbletea_widgets::textarea;
 
-This Rust example renders:
+let mut ta = textarea::new();
+ta.set_height(3);  // 3 lines visible
+ta.set_width(terminal_width);
 
-- A left prompt: `┃ ` (always visible)
-- A placeholder: `Send a message...` shown when input is empty, styled in dark gray for subtlety
-- The sender label `You:` in a bright pink approximation (magenta + bold) when messages are sent
+// For multi-line, you might want a different send mechanism
+// For example: Ctrl+Enter to send, Enter for new line
+```
 
-Notes
-- We currently use `crossterm` ANSI styling for colors.
-- TODO(lipgloss): Port these styles to a Lip Gloss-compatible approach for exact parity with the Go example.
+### Custom Multi-line Implementation
 
-## Alt screen
+For a custom multi-line input similar to the one in `examples/textarea/`:
 
-We enable alt screen for a clean UI. If debugging, you can disable it in `main()` and use println! statements.
+```rust
+struct TextArea {
+    lines: Vec<String>,
+    cursor_row: usize,
+    cursor_col: usize,
+    height: usize,
+    placeholder: String,
+}
 
-## Extending this example
+impl TextArea {
+    fn view(&self) -> String {
+        if self.is_empty() && !self.focused {
+            // Show placeholder
+            return format!("┃ {}", self.placeholder);
+        }
+        
+        // Show lines with cursor
+        let visible_lines = self.get_visible_lines();
+        visible_lines
+            .iter()
+            .enumerate()
+            .map(|(i, line)| {
+                if i == self.cursor_row {
+                    // Insert cursor
+                    format!("┃ {}", line)
+                } else {
+                    format!("┃ {}", line)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+```
 
-- Styling: Add a Lip Gloss equivalent for `senderStyle` (magenta/purple) and apply it to the `"You: "` label.
-- True viewport behavior: The current version truncates to the last N wrapped lines equal to the viewport height. You can store a larger buffer and render a slice based on scroll position to support "PageUp/PageDown" etc.
-- Cursor/caret: Enhance the textarea to show a cursor and support multi-line input and keybindings, similar to Bubbles’ `textarea`.
-- Tests: Extract wrap logic and add unit tests to validate edge cases (long words, unicode width, etc.).
+### Switching Between Single and Multi-line
 
----
+You could make the input mode switchable:
 
-## Using this example in your own app
+```rust
+enum InputMode {
+    SingleLine(textinput::Model),
+    MultiLine(textarea::Model),
+}
 
-This folder is self-contained. To adapt it:
+// Toggle with a key combination
+KeyCode::Char('m') if modifiers.contains(KeyModifiers::ALT) => {
+    self.input_mode = match self.input_mode {
+        InputMode::SingleLine(input) => {
+            let mut ta = textarea::new();
+            ta.set_value(&input.value());
+            InputMode::MultiLine(ta)
+        }
+        InputMode::MultiLine(ta) => {
+            let mut input = textinput::new();
+            input.set_value(&ta.lines().join(" "));
+            InputMode::SingleLine(input)
+        }
+    };
+}
+```
 
-1) Copy the minimal `TextArea` and `Viewport` structs from `main.rs` into your project.
-2) Keep the layout math: render `viewport`, then a blank `GAP` (two newlines), then `textarea`.
-3) Handle `WindowSizeMsg` to update widths/heights and re-wrap content.
-4) Customize the placeholder, prompt, and colors (currently via `crossterm`).
-5) Replace the simple wrapper with your preferred text layout if needed.
+## Styling with lipgloss
 
-This README and the code in this directory only describe and implement this chat example.
+Use `lipgloss-extras` for rich text styling:
 
----
+```rust
+use lipgloss_extras::lipgloss::{Style, Color};
 
-## How it works (for new Rustaceans)
+// Create styles for different message types
+let user_style = Style::new()
+    .foreground(Color::from("5"))      // Magenta
+    .bold(true);
 
-This example implements the classic Bubble Tea architecture in Rust with three core pieces:
+let system_style = Style::new()
+    .foreground(Color::from("3"))      // Yellow
+    .italic(true);
 
-1) Model (state)
-- `ChatModel` holds the `Viewport`, `TextArea`, and a `Vec<String>` of messages.
+let error_style = Style::new()
+    .foreground(Color::from("1"))      // Red
+    .background(Color::from("52"))     // Dark red background
+    .padding(1);
 
-2) Update (state transitions)
-- The `update(&mut self, msg: Msg)` method handles:
-  - Window resize (`WindowSizeMsg`): updates widths/heights and re-wraps the content.
-  - Key input (`KeyMsg`): Enter to send, Backspace to delete, Esc/Ctrl+C to quit.
-  - A periodic `BlinkMsg` to toggle the cursor visibility.
+// Apply styles
+let styled_message = user_style.render("You: ");
+```
 
-3) View (render)
-- `view(&self)` returns a `String` that is printed to the terminal each frame.
-- We compose: `viewport.view() + GAP + textarea.view()`.
+## Advanced Features
 
-Under the hood, `Program::<ChatModel>` drives the event loop: it dispatches terminal events as messages, calls `update`, and re-renders using `view`.
+### Message History with Scrolling
 
-### The mini TextArea and Viewport
+To add scrollable history beyond viewport size:
 
-- `TextArea` is a focused single-line input with:
-  - `placeholder: "Send a message..."` (shown in dark gray when empty)
-  - `prompt: "┃ "` (always visible on the left)
-  - `char_limit: 280`
-  - A blinking block cursor when focused
+```rust
+struct ChatModel {
+    messages: Vec<String>,      // All messages
+    viewport: viewport::Model,  // Current view
+    scroll_offset: usize,       // Current scroll position
+}
 
-- `Viewport` holds the wrapped chat messages. We wrap lines to the current width and keep the bottom-most lines visible to emulate a “stick to bottom” chat.
+// Allow scrolling with arrow keys
+KeyCode::Up => {
+    if self.scroll_offset > 0 {
+        self.scroll_offset -= 1;
+        self.update_viewport();
+    }
+}
+KeyCode::Down => {
+    if self.scroll_offset < self.messages.len() {
+        self.scroll_offset += 1;
+        self.update_viewport();
+    }
+}
+```
 
-### Resizing and wrapping
+### Timestamps and Message Metadata
 
-On `WindowSizeMsg`, we:
-1) Set `viewport.width = msg.width` and `textarea.set_width(msg.width)`
-2) Compute `viewport.height = msg.height - textarea.height - GAP_height`
-3) Re-wrap and keep the viewport at the bottom
+```rust
+struct Message {
+    sender: String,
+    content: String,
+    timestamp: chrono::DateTime<chrono::Local>,
+    is_system: bool,
+}
 
-### Styling
+impl Message {
+    fn render(&self, width: usize) -> String {
+        let time = self.timestamp.format("%H:%M").to_string();
+        let sender_style = if self.is_system {
+            Style::new().foreground(Color::from("8"))
+        } else {
+            Style::new().foreground(Color::from("5"))
+        };
+        
+        format!("[{}] {}: {}", 
+            time,
+            sender_style.render(&self.sender),
+            self.content
+        )
+    }
+}
+```
 
-- We use `crossterm::style::Stylize` for simple colors:
-  - Placeholder in dark gray
-  - Sender label `"You: "` in a bright pink approximation (`magenta().bold()`).
-- TODO(lipgloss): Replace ANSI styling with Lip Gloss-style theming to match the Go example exactly (e.g., `lipgloss.NewStyle().Foreground("5")`).
+### Input Validation
 
----
+```rust
+// Character limit with visual feedback
+fn update_input(&mut self, key: KeyCode) {
+    let current_len = self.textinput.value().len();
+    let limit = 280;
+    
+    if current_len >= limit {
+        // Show warning
+        self.input_style = Style::new()
+            .foreground(Color::from("1")); // Red
+    } else {
+        self.input_style = Style::new()
+            .foreground(Color::from("7")); // Default
+    }
+}
+```
 
-## Integrate this pattern into your app
+## Testing
 
-1) Add dependencies (example):
+Run the integration tests:
+
+```bash
+cargo test --example chat
+```
+
+## Troubleshooting
+
+### Input not working
+- Ensure `textinput.focus()` is called during initialization
+- Check that key events are being passed to `textinput.update()`
+
+### Layout issues
+- Terminal size might be 0x0 initially - use `window_size()` command
+- Account for prompt width when setting input width: `width - 2`
+
+### Text wrapping problems
+- Consider unicode width for proper character counting
+- Handle very long words that exceed terminal width
+
+## Next Steps
+
+- Add message persistence with SQLite
+- Implement network messaging with WebSockets
+- Add emoji support with unicode rendering
+- Create chat rooms/channels functionality
+- Add typing indicators
+- Implement message editing/deletion
+- Add file sharing capabilities
+
+## Dependencies
 
 ```toml
 [dependencies]
-bubbletea-rs = { path = "../../" }
-crossterm = "0.27"
+bubbletea-rs = "0.0.6"
+bubbletea-widgets = "0.1.6"
+lipgloss-extras = { version = "0.0.8", features = ["full"] }
+crossterm = "0.29"
 tokio = { version = "1", features = ["full"] }
 ```
 
-2) Define your model and implement `Model`:
+## License
 
-```rust
-use bubbletea_rs::{Model, Msg, Cmd};
-
-struct MyModel { /* your fields */ }
-
-impl Model for MyModel {
-    fn init() -> (Self, Option<Cmd>) {
-        (Self { /* init fields */ }, None)
-    }
-
-    fn update(&mut self, msg: Msg) -> Option<Cmd> {
-        // match on WindowSizeMsg, KeyMsg, timers, network, etc.
-        None
-    }
-
-    fn view(&self) -> String {
-        // return the full screen as a String
-        "Hello".into()
-    }
-}
-```
-
-3) Start the program (async main with Tokio):
-
-```rust
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use bubbletea_rs::Program;
-    let program = Program::<MyModel>::builder()
-        .alt_screen(true)
-        .signal_handler(true)
-        .build()?;
-    program.run().await?;
-    Ok(())
-}
-```
-
-4) Reuse pieces from the chat example
-- Copy the simple `TextArea` and `Viewport` structs (or adapt them) into your project.
-- Keep the `GAP` and layout math to split the screen between output and input.
-- Wire up `WindowSizeMsg` to recompute widths/heights and update wrapped content.
-
-5) Customize it
-- Change `placeholder`, `prompt`, and `char_limit` as needed.
-- Style with `crossterm` now; migrate to Lip Gloss later for richer theming (see TODO above).
-- Extend `Viewport` to support real scrolling and history.
-
-### Keybindings summary
-
-- Enter: send the message (`"You: " + input`)
-- Backspace: delete last char
-- Esc or Ctrl+C: quit (prints current input before exit)
-
-### Terminal support
-
-The example uses ANSI styling via `crossterm`. Most modern terminals support it. If colors don’t show as expected, check your terminal’s color profile and ensure ANSI colors are enabled.
+See the main repository LICENSE file.
