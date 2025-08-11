@@ -259,14 +259,15 @@ dependencies = [
 
 [[package]]
 name = "bubbletea-widgets"
-version = "0.1.6"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e036baa82812e890021c426e6e8ac1684414f66fbb10121340792d0c4d0a635c"
+checksum = "10b5d7b7f068ab75ead05b2fda73ac8f93c4625d6bcfdee34cfa9f2814509aed"
 dependencies = [
  "bubbletea-rs",
  "clipboard",
  "crossterm",
  "fuzzy-matcher",
+ "libc",
  "lipgloss-extras",
  "once_cell",
  "strip-ansi-escapes",
