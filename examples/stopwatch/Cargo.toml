@@ -1,0 +1,15 @@
+[package]
+name = "stopwatch"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "main"
+path = "main.rs"
+
+[dependencies]
+bubbletea-rs = { path = "../../" }
+bubbletea-widgets = "0.1.9"
+lipgloss-extras = { version = "0.0.8", features = ["full"] }
+crossterm = "0.29.0"
+tokio = { version = "1.25.0", features = ["full"] }

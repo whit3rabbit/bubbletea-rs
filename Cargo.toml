@@ -28,6 +28,7 @@ members = [
     "examples/cellbuffer",
     "examples/timer",
     "examples/timer-advanced",
+    "examples/stopwatch",
 ]
 
 [patch.crates-io]

@@ -17,6 +17,7 @@ A direct port of the Go Bubble Tea timer example demonstrating how to use `bubbl
 
 - **`bubbletea-widgets::timer`**: High-precision countdown timer with automatic tick management (v0.0.8+ improved timing accuracy)
 - **`bubbletea-widgets::key`**: Organized key binding system with help text and enable/disable functionality
+- **`bubbletea-widgets::help`**: Automatic help text generation that displays available key bindings
 
 ## Run
 
@@ -63,6 +64,7 @@ type keymap struct {
 pub struct Model {
     timer: TimerModel,
     keymap: Keymap,
+    help: HelpModel,
     quitting: bool,
 }
 
@@ -126,8 +128,8 @@ if let Some(_start_stop_msg) = msg.downcast_ref::<StartStopMsg>() {
 
 ## Key Differences from Go Version
 
-### Simplified Help System
-The Rust version implements the help functionality directly rather than using a separate help widget, making it more self-contained while maintaining the same user experience.
+### Help System Widget
+The Rust version now uses the `bubbletea-widgets::help` widget matching Go's `bubbles/help` package, providing automatic help text generation from key bindings with proper filtering for enabled/disabled states.
 
 ### Rust-Specific Patterns
 - **Pattern Matching**: Uses `if let Some()` patterns instead of Go's type switches
