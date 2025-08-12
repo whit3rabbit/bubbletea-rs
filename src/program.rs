@@ -630,6 +630,30 @@ impl<M: Model> Program<M> {
                                 });
                                 continue; // Don't pass this to the model
                             }
+                        } else if msg.is::<crate::event::BatchCmdMsg>() {
+                            // Handle BatchCmdMsg: spawn all commands concurrently without waiting
+                            if let Ok(batch_cmd_msg) = msg.downcast::<crate::event::BatchCmdMsg>() {
+                                for c in batch_cmd_msg.0 {
+                                    let event_tx = self.event_tx.clone();
+                                    let shutdown_token = self.shutdown_token.clone();
+                                    if let Some(ref monitor) = self.memory_monitor {
+                                        monitor.task_spawned();
+                                    }
+                                    self.task_set.spawn(async move {
+                                        tokio::select! {
+                                            _ = shutdown_token.cancelled() => {
+                                                // Shutdown requested, don't process command
+                                            }
+                                            result = c => {
+                                                if let Some(msg) = result {
+                                                    let _ = event_tx.send(msg);
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                            continue; // We've handled the batch, don't pass it to the model
                         } else if msg.is::<crate::event::BatchMsgInternal>() {
                             if let Ok(batch_msg) = msg.downcast::<crate::event::BatchMsgInternal>() {
                                 // Process each message in the batch and accumulate resulting cmds

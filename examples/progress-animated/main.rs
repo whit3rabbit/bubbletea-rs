@@ -228,9 +228,9 @@ impl Model for ProgressAnimatedModel {
                 self.progress.target_percent
             );
 
-            // Check if target is already at 100% (matching Go's behavior exactly)
-            if self.progress.target_percent >= 1.0 {
-                dlog!("tick: target at 100%, quitting");
+            // Check if current animated value is at 100% (matching Go's behavior exactly)
+            if self.progress.percent() >= 1.0 {
+                dlog!("tick: current at 100%, quitting");
                 return Some(quit()); // Auto-quit when complete
             }
 

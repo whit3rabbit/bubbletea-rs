@@ -2,7 +2,7 @@
 //! Commands are asynchronous operations that can produce messages to update the model.
 
 use crate::event::{
-    next_timer_id, ClearScreenMsg, DisableBracketedPasteMsg, DisableMouseMsg,
+    next_timer_id, BatchCmdMsg, ClearScreenMsg, DisableBracketedPasteMsg, DisableMouseMsg,
     DisableReportFocusMsg, EnableBracketedPasteMsg, EnableMouseAllMotionMsg,
     EnableMouseCellMotionMsg, EnableReportFocusMsg, EnterAltScreenMsg, ExitAltScreenMsg,
     HideCursorMsg, InterruptMsg, KillMsg, Msg, PrintMsg, PrintfMsg, QuitMsg, RequestWindowSizeMsg,
@@ -147,9 +147,10 @@ pub fn suspend() -> Cmd {
 
 /// Creates a command that executes a batch of commands concurrently.
 ///
-/// The commands in the batch will be executed in parallel and all messages
-/// from the commands will be collected and returned. This is useful when
-/// you need to perform multiple independent operations simultaneously.
+/// The commands in the batch will be executed in parallel immediately when
+/// this command is processed by the program. This is a non-blocking operation
+/// that spawns each command in its own task, allowing for smooth animations
+/// and responsive user interfaces.
 ///
 /// # Arguments
 ///
@@ -157,7 +158,7 @@ pub fn suspend() -> Cmd {
 ///
 /// # Returns
 ///
-/// A command that executes all provided commands in parallel
+/// A command that immediately dispatches all provided commands for concurrent execution
 ///
 /// # Examples
 ///
@@ -192,16 +193,8 @@ pub fn suspend() -> Cmd {
 /// ```
 pub fn batch(cmds: Vec<Cmd>) -> Cmd {
     Box::pin(async move {
-        use futures::future::join_all;
-
-        let results = join_all(cmds).await;
-        let messages: Vec<Msg> = results.into_iter().flatten().collect();
-
-        if messages.is_empty() {
-            None
-        } else {
-            Some(Box::new(crate::event::BatchMsgInternal { messages }) as Msg)
-        }
+        // Don't wait for commands - just wrap them for immediate spawning
+        Some(Box::new(BatchCmdMsg(cmds)) as Msg)
     })
 }
 

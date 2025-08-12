@@ -151,6 +151,24 @@ impl Model for MyApp {
 
 > **Warning:** Calling `every()` repeatedly in your `update` loop will spawn numerous background tasks, quickly degrading performance and causing memory leaks. **Always use the `tick()` re-arming pattern for repeating actions.**
 
+### Using `batch()` for Smooth Animations
+
+When combining timers with animations, use `command::batch()` to ensure smooth performance. The `batch()` command is **non-blocking** - it spawns all commands immediately and returns instantly, allowing rapid animation frames to process alongside slower timers.
+
+```rust
+// ✅ Good: Smooth animation with batched commands
+fn update(&mut self, msg: Msg) -> Option<Cmd> {
+    if msg.downcast_ref::<TimerMsg>().is_some() {
+        let next_timer = command::tick(Duration::from_secs(1), |_| Box::new(TimerMsg) as Msg);
+        let animation = self.progress_bar.animate_to_next_step(); // Returns a 16ms animation command
+        
+        // batch() spawns both immediately - no blocking!
+        return Some(command::batch(vec![next_timer, animation]));
+    }
+    None
+}
+```
+
 **Correct Usage (The `tick()` Re-arming Pattern):**
 ```rust
 use bubbletea_rs::{command, Model, Msg, Cmd};
@@ -260,7 +278,7 @@ Commands are how you interact with the world outside your `update` function.
 
 | Command                 | Description                                    |
 | ----------------------- | ---------------------------------------------- |
-| `batch(Vec<Cmd>)`       | Executes a list of commands concurrently.      |
+| `batch(Vec<Cmd>)`       | **Non-blocking.** Spawns all commands immediately and concurrently. Returns instantly without waiting for completion. Perfect for animations with timers. |
 | `sequence(Vec<Cmd>)`    | Executes a list of commands sequentially.      |
 
 ### Timers

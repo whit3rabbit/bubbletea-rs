@@ -412,6 +412,10 @@ pub struct BatchMsgInternal {
     pub messages: Vec<Msg>,
 }
 
+/// A message containing commands to be executed concurrently.
+/// This enables non-blocking batch operations that spawn commands immediately.
+pub struct BatchCmdMsg(pub Vec<crate::Cmd>);
+
 /// A message to signal the terminal to enter the alternate screen buffer.
 #[derive(Debug, Clone)]
 pub struct EnterAltScreenMsg;
