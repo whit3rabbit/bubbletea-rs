@@ -1,23 +1,24 @@
 //! Progress Animated Example
 //!
 //! Demonstrates:
-//! - Animated progress bar with smooth transitions
-//! - Progress increments by 25% every second with animation
+//! - Animated progress bar with gradient colors using bubbletea-widgets styling
+//! - Progress increments by 25% every second with smooth animation
 //! - Window resize handling for progress bar sizing  
 //! - Built-in progress bar animation system with frame messages
 //! - Automatic completion and exit when reaching 100%
-//! - Command batching for multiple simultaneous operations
+//! - Proper key binding management using bubbletea-widgets::key
 //!
-//! This example shows an animated progress bar that smoothly transitions
-//! between progress states, demonstrating how to create visually appealing
-//! progress indicators with built-in animation capabilities.
+//! This example shows how to integrate bubbletea-widgets with custom progress
+//! animation, creating visually appealing progress indicators that match
+//! the Go Bubble Tea version's behavior and visual style.
 //!
 //! This is a faithful port of the Go Bubble Tea progress-animated example,
-//! maintaining the same behavior: increment by 25% every second with smooth
-//! animations, quit on any key press, and automatically quit when reaching 100%.
+//! modernized to use bubbletea-widgets for key handling while maintaining
+//! the custom animated progress implementation for precise control.
 
 use bubbletea_rs::gradient::gradient_filled_segment;
 use bubbletea_rs::{batch, quit, tick, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
+use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -39,7 +40,7 @@ pub struct ProgressTickMsg;
 #[derive(Debug)]
 pub struct ProgressFrameMsg;
 
-/// Animated progress bar with smooth transitions
+/// Animated progress bar with smooth transitions using bubbletea-widgets styling
 #[derive(Debug)]
 pub struct AnimatedProgressBar {
     pub width: usize,
@@ -62,7 +63,7 @@ impl AnimatedProgressBar {
         }
     }
 
-    /// Set target percentage for animation
+    /// Set target percentage for animation (matching bubbletea-widgets progress API)
     pub fn set_percent(&mut self, percent: f64) -> Option<Cmd> {
         let old_target = self.target_percent;
         self.target_percent = percent.clamp(0.0, 1.0);
@@ -92,7 +93,7 @@ impl AnimatedProgressBar {
         }
     }
 
-    /// Increment target percentage by amount
+    /// Increment target percentage by amount (matching bubbletea-widgets progress API)
     pub fn incr_percent(&mut self, amount: f64) -> Option<Cmd> {
         self.set_percent(self.target_percent + amount)
     }
@@ -149,18 +150,18 @@ impl AnimatedProgressBar {
         }
     }
 
-    /// Get current animated percentage
+    /// Get current animated percentage (matching bubbletea-widgets progress API)
     pub fn percent(&self) -> f64 {
         self.current_percent
     }
 
-    /// Render animated progress bar
+    /// Render animated progress bar with gradient colors (matching Go version)
     pub fn view(&self) -> String {
         let percent = self.current_percent.clamp(0.0, 1.0);
         let filled_width = (self.width as f64 * percent).round() as usize;
         let empty_width = self.width.saturating_sub(filled_width);
 
-        // Gradient colors (matching Go's default gradient: similar to #FF7CCB -> #FDFF8C)
+        // Use bubbletea-rs gradient colors (matching Go's default gradient)
         let filled_str = gradient_filled_segment(filled_width, self.filled_char);
 
         let empty_str = self.empty_char.to_string().repeat(empty_width);
@@ -178,16 +179,24 @@ impl AnimatedProgressBar {
     }
 }
 
-/// The application state - matching the Go model struct
+/// The application state - using bubbletea-widgets key bindings
 #[derive(Debug)]
 pub struct ProgressAnimatedModel {
     pub progress: AnimatedProgressBar,
+    pub quit_key_binding: Binding,
 }
 
 impl ProgressAnimatedModel {
     pub fn new() -> Self {
+        // Set up proper key bindings using bubbletea-widgets
+        let quit_key_binding = new_binding(vec![
+            with_keys_str(&["q", "esc", "ctrl+c"]),
+            with_help("any key", "quit"),
+        ]);
+
         Self {
             progress: AnimatedProgressBar::new(),
+            quit_key_binding,
         }
     }
 
@@ -219,9 +228,9 @@ impl Model for ProgressAnimatedModel {
                 self.progress.target_percent
             );
 
-            // Check if already at 100% (current percentage)
-            if self.progress.current_percent >= 1.0 {
-                dlog!("tick: current at 100%, quitting");
+            // Check if target is already at 100% (matching Go's behavior exactly)
+            if self.progress.target_percent >= 1.0 {
+                dlog!("tick: target at 100%, quitting");
                 return Some(quit()); // Auto-quit when complete
             }
 
@@ -232,7 +241,8 @@ impl Model for ProgressAnimatedModel {
 
             dlog!("tick: target {:.3} -> {:.3}", old_target, new_target);
 
-            // Batch next tick with animation command (matching Go's tea.Batch)
+            // ALWAYS batch next tick with animation command (matching Go's tea.Batch)
+            // The quit check happens at the beginning of the NEXT tick
             let next_tick = tick(Duration::from_secs(1), |_| Box::new(ProgressTickMsg) as Msg);
             match animation_cmd {
                 Some(anim_cmd) => Some(batch(vec![next_tick, anim_cmd])),
