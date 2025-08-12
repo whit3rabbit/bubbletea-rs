@@ -18,4 +18,4 @@ bubbletea-widgets = "0.1.9"
 lipgloss-extras = { version = "0.0.8", features = ["full"] }
 crossterm = "0.29"
 tokio = { version = "1.0", features = ["full"] }
-rand = "0.8"
+rand = "0.9"
