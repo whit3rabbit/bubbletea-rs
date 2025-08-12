@@ -1,12 +1,16 @@
 // List Default Example - Matches the Go Bubble Tea list-default example
 //
-// Now uses bubbletea-widgets v0.1.6 with the enhanced List API for proper
-// filter state management. No workarounds needed!
+// This is a minimal implementation that matches the simplicity of the Go version.
+// The rich help text is provided automatically by bubbletea-widgets.
 
-use bubbletea_rs::{window_size, Cmd, KeyMsg, Model as BubbleTeaModel, Msg, Program, WindowSizeMsg};
-use bubbletea_widgets::list::{DefaultItem, DefaultDelegate, Model as List};
+use bubbletea_rs::{
+    window_size, Cmd, KeyMsg, Model as BubbleTeaModel, Msg, Program, WindowSizeMsg,
+};
+use bubbletea_widgets::list::{DefaultDelegate, DefaultItem, Model as List};
+use bubbletea_widgets::paginator::Type as PaginatorType;
 use crossterm::event::{KeyCode, KeyModifiers};
-use lipgloss_extras::lipgloss::{Style, Color};
+use lipgloss_extras::lipgloss::renderer::{self, ColorProfileKind};
+use lipgloss_extras::lipgloss::Style;
 
 // Synthetic message used to trigger the initial render immediately after startup.
 struct InitRenderMsg;
@@ -50,22 +54,28 @@ impl BubbleTeaModel for Model {
             DefaultItem::new("Stickers", "The thicker the vinyl the better"),
             DefaultItem::new("20° Weather", "Celsius, not Fahrenheit"),
             DefaultItem::new("Warm light", "Like around 2700 Kelvin"),
-            DefaultItem::new("The vernal equinox", "The autumnal equinox is pretty good too"),
+            DefaultItem::new(
+                "The vernal equinox",
+                "The autumnal equinox is pretty good too",
+            ),
             DefaultItem::new("Gaffer's tape", "Basically sticky fabric"),
             DefaultItem::new("Terrycloth", "In other words, towel fabric"),
         ];
 
-        // Create list with default delegate and try to fix filter highlighting issues
-        let mut delegate = DefaultDelegate::new();
-        
-        // Test the v0.1.2 fix with visible highlighting
-        // If the fix worked, we should see proper highlighting without character separation
-        delegate.styles.filter_match = Style::new()
-            .bold(true)
-            .foreground(Color::from("#FBBF24")); // Yellow highlighting to make it visible
-        
-        let list = List::new(items, delegate, 80, 24)
-            .with_title("My Fave Things");
+        // Create list with default delegate - simple like Go version
+        let delegate = DefaultDelegate::new();
+
+        // Get initial terminal size (like Go version)
+        let (terminal_width, terminal_height) = crossterm::terminal::size().unwrap_or((80, 24));
+        let frame_width = 4; // 2 left + 2 right margin from doc_style
+        let frame_height = 2; // 1 top + 1 bottom margin from doc_style
+
+        let list_width = (terminal_width as usize).saturating_sub(frame_width);
+        let list_height = (terminal_height as usize).saturating_sub(frame_height);
+
+        let list = List::new(items, delegate, list_width, list_height)
+            .with_title("My Fave Things")
+            .with_pagination_type(PaginatorType::Dots); // Use dots pagination to match Go version
 
         (Model { list }, Some(init_render_cmd()))
     }
@@ -73,69 +83,52 @@ impl BubbleTeaModel for Model {
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         // Handle initial render message
         if msg.downcast_ref::<InitRenderMsg>().is_some() {
-            // Request window size to get proper initial dimensions
             return Some(window_size());
         }
 
-        // Handle key messages using the enhanced v0.1.6 API
+        // Handle Ctrl+C like the Go version (only custom key handling)
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            match key_msg.key {
-                // Always quit on Ctrl+C regardless of filter state
-                KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
-                    return Some(bubbletea_rs::quit());
-                }
-                
-                // Handle Escape key - clear filter or quit using new API
-                KeyCode::Esc => {
-                    if self.list.is_filtering() {
-                        // Use the new clear_filter() method for clean single-escape behavior
-                        return self.list.clear_filter();
-                    } else {
-                        // Not filtering: quit
-                        return Some(bubbletea_rs::quit());
-                    }
-                }
-                
-                // Handle 'q' key - quit only when not filtering using new API
-                KeyCode::Char('q') => {
-                    if !self.list.is_filtering() {
-                        return Some(bubbletea_rs::quit());
-                    }
-                    // Let list handle 'q' during filtering
-                }
-                
-                // All other keys: delegate to list widget
-                _ => {}
+            if key_msg.key == KeyCode::Char('c')
+                && key_msg.modifiers.contains(KeyModifiers::CONTROL)
+            {
+                return Some(bubbletea_rs::quit());
             }
         }
 
-        // Handle window size exactly like Go version
-        if let Some(_size_msg) = msg.downcast_ref::<WindowSizeMsg>() {
-            // Go version: m.list.SetSize(msg.Width-h, msg.Height-v)
-            // bubbletea-widgets handles this internally, so we just delegate
+        // Handle window size like Go version
+        if let Some(size_msg) = msg.downcast_ref::<WindowSizeMsg>() {
+            // Go version: h, v := docStyle.GetFrameSize(); m.list.SetSize(msg.Width-h, msg.Height-v)
+            // Calculate frame size from doc_style (margin 1,2 = 2 vertical, 4 horizontal)
+            let frame_width = 4; // 2 left + 2 right margin
+            let frame_height = 2; // 1 top + 1 bottom margin
+
+            let new_width = (size_msg.width as usize).saturating_sub(frame_width);
+            let new_height = (size_msg.height as usize).saturating_sub(frame_height);
+
+            // Update list size to match terminal dimensions
+            self.list.set_size(new_width, new_height);
         }
 
-        // Always delegate to list widget (like Go version)
+        // Let list handle all other messages (like Go version)
         self.list.update(msg)
     }
 
     fn view(&self) -> String {
         // Render list view with document style (matching Go version)
         let view = self.list.view();
-        
-        // Additional debug info can be added here if needed
-        // For example, we could show our filter state vs widget filter state
-        
+
         doc_style().render(&view)
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Force TrueColor mode FIRST to ensure proper color rendering
+    // Must be set before any lipgloss styling operations
+    renderer::set_color_profile(ColorProfileKind::TrueColor);
+
     // Create program with alt screen (matching Go version)
-    let program = Program::<Model>::builder()
-        .alt_screen(true)
-        .build()?;
+    let program = Program::<Model>::builder().alt_screen(true).build()?;
 
     // Run the program
     let _result = program.run().await?;

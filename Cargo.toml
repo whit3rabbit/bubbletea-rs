@@ -9,6 +9,7 @@ members = [
     "examples/help",
     "examples/http",
     "examples/list-default",
+    "examples/list-fancy",
     "examples/list-simple",
     "examples/progress-animated",
     "examples/progress-download",

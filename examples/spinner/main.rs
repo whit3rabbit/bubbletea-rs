@@ -1,121 +1,80 @@
 //! Spinner Example
 //!
-//! Demonstrates:
-//! - Loading spinner animation with customizable styles
-//! - Timed animation updates using `every()` command
-//! - Different spinner patterns and styles
-//! - Continuous animation loop until user quits
-//! - Error handling and state management
+//! A simple program demonstrating the spinner component, matching the Go
+//! Bubble Tea spinner example.
 //!
-//! This example shows a spinning loading indicator that animates continuously,
-//! demonstrating how to create smooth animations in terminal applications.
+//! This example shows a simple loading spinner that runs forever until
+//! the user quits, demonstrating basic spinner functionality.
 
 use bubbletea_rs::{quit, tick, Cmd, KeyMsg, Model, Msg, Program};
 use crossterm::event::{KeyCode, KeyModifiers};
+use lipgloss_extras::lipgloss::{Color, Style};
 use std::time::Duration;
 
 /// Message for spinner animation ticks
 #[derive(Debug)]
 pub struct SpinnerTickMsg;
 
-/// Different spinner styles available
-#[derive(Debug, Clone, PartialEq)]
-pub enum SpinnerStyle {
-    Dots,
-    Line,
-    Arc,
-    Bounce,
-    Clock,
-}
+/// Error message type
+#[derive(Debug)]
+pub struct ErrMsg(String);
 
-impl SpinnerStyle {
-    pub fn frames(&self) -> &'static [&'static str] {
-        match self {
-            SpinnerStyle::Dots => &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-            SpinnerStyle::Line => &["|", "/", "-", "\\"],
-            SpinnerStyle::Arc => &["◜", "◠", "◝", "◞", "◡", "◟"],
-            SpinnerStyle::Bounce => &["⠁", "⠂", "⠄", "⠂"],
-            SpinnerStyle::Clock => &[
-                "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛",
-            ],
-        }
-    }
-
-    pub fn interval(&self) -> Duration {
-        match self {
-            SpinnerStyle::Dots => Duration::from_millis(100),
-            SpinnerStyle::Line => Duration::from_millis(150),
-            SpinnerStyle::Arc => Duration::from_millis(120),
-            SpinnerStyle::Bounce => Duration::from_millis(300),
-            SpinnerStyle::Clock => Duration::from_millis(500),
-        }
-    }
-}
-
-/// The application state
+/// The application model
 #[derive(Debug)]
 pub struct SpinnerModel {
-    pub style: SpinnerStyle,
-    pub current_frame: usize,
-    pub message: String,
-    pub quitting: bool,
-    pub error: Option<String>,
+    current_frame: usize,
+    quitting: bool,
+    err: Option<String>,
 }
 
 impl SpinnerModel {
-    pub fn new() -> Self {
+    /// Create a new spinner model
+    fn new() -> Self {
         Self {
-            style: SpinnerStyle::Dots,
             current_frame: 0,
-            message: "Loading forever...press q to quit".to_string(),
             quitting: false,
-            error: None,
+            err: None,
         }
     }
 
-    pub fn with_style(mut self, style: SpinnerStyle) -> Self {
-        self.style = style;
-        self
+    /// Get the dot spinner frames (matching Go version)
+    fn frames() -> &'static [&'static str] {
+        &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     }
 
-    pub fn with_message(mut self, message: String) -> Self {
-        self.message = message;
-        self
+    /// Get the spinner interval
+    fn interval() -> Duration {
+        Duration::from_millis(100)
     }
 
-    pub fn set_error(&mut self, error: String) {
-        self.error = Some(error);
+    /// Get the current spinner frame with pink styling (#205)
+    fn current_spinner_frame(&self) -> String {
+        let frames = Self::frames();
+        let frame = frames[self.current_frame % frames.len()];
+        
+        // Apply pink styling (#205) to match Go version exactly
+        let style = Style::new().foreground(Color::from("205"));
+        style.render(frame)
     }
 
-    pub fn current_spinner_frame(&self) -> &str {
-        let frames = self.style.frames();
-        frames[self.current_frame % frames.len()]
-    }
-
-    pub fn advance_frame(&mut self) {
-        let frames = self.style.frames();
+    /// Advance to the next frame
+    fn advance_frame(&mut self) {
+        let frames = Self::frames();
         self.current_frame = (self.current_frame + 1) % frames.len();
     }
 
-    pub fn change_style(&mut self) {
-        self.style = match self.style {
-            SpinnerStyle::Dots => SpinnerStyle::Line,
-            SpinnerStyle::Line => SpinnerStyle::Arc,
-            SpinnerStyle::Arc => SpinnerStyle::Bounce,
-            SpinnerStyle::Bounce => SpinnerStyle::Clock,
-            SpinnerStyle::Clock => SpinnerStyle::Dots,
-        };
-        self.current_frame = 0; // Reset animation
+    /// Set an error
+    fn set_error(&mut self, error: String) {
+        self.err = Some(error);
     }
 }
 
 impl Model for SpinnerModel {
     fn init() -> (Self, Option<Cmd>) {
         let model = SpinnerModel::new();
-        let interval = model.style.interval();
-
-        // Start the spinner animation with a single-shot tick
-        let cmd = tick(interval, |_| Box::new(SpinnerTickMsg) as Msg);
+        
+        // Start the spinner animation
+        let cmd = tick(Self::interval(), |_| Box::new(SpinnerTickMsg) as Msg);
         (model, Some(cmd))
     }
 
@@ -124,31 +83,28 @@ impl Model for SpinnerModel {
         if msg.downcast_ref::<SpinnerTickMsg>().is_some() {
             if !self.quitting {
                 self.advance_frame();
-                let interval = self.style.interval();
-                // Schedule the next single-shot tick; avoids accumulating timers
-                return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
+                return Some(tick(Self::interval(), |_| Box::new(SpinnerTickMsg) as Msg));
             }
         }
 
-        // Handle keyboard input
+        // Handle error messages
+        if let Some(err_msg) = msg.downcast_ref::<ErrMsg>() {
+            self.set_error(err_msg.0.clone());
+            return None;
+        }
+
+        // Handle keyboard input - matching Go version exactly
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
             match key_msg.key {
-                KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.quitting = true;
-                    return Some(quit());
-                }
                 KeyCode::Char('q') | KeyCode::Esc => {
                     self.quitting = true;
                     return Some(quit());
                 }
-                KeyCode::Char(' ') => {
-                    // Space bar changes spinner style
-                    self.change_style();
-                    let interval = self.style.interval();
-                    // Re-arm single-shot tick with new interval
-                    return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
+                KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quitting = true;
+                    return Some(quit());
                 }
-                _ => {}
+                _ => return None,
             }
         }
 
@@ -156,48 +112,37 @@ impl Model for SpinnerModel {
     }
 
     fn view(&self) -> String {
-        if let Some(error) = &self.error {
-            return format!("Error: {}", error);
+        // Handle errors first (matching Go version)
+        if let Some(error) = &self.err {
+            return error.clone();
         }
 
-        let spinner_frame = self.current_spinner_frame();
-        let style_name = match self.style {
-            SpinnerStyle::Dots => "Dots",
-            SpinnerStyle::Line => "Line",
-            SpinnerStyle::Arc => "Arc",
-            SpinnerStyle::Bounce => "Bounce",
-            SpinnerStyle::Clock => "Clock",
-        };
-
-        let mut view = String::new();
-        view.push_str(&format!("\n\n   {} {}\n\n", spinner_frame, self.message));
-        view.push_str(&format!(
-            "   Style: {} (press space to change)\n",
-            style_name
-        ));
-
+        // Main view - matching Go version format exactly
+        let str = format!(
+            "\n\n   {} Loading forever...press q to quit\n\n",
+            self.current_spinner_frame()
+        );
+        
         if self.quitting {
-            view.push('\n');
+            return str + "\n";
         }
-
-        view
+        
+        str
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Starting spinner example...");
-
     // Create and run the program
     let program = Program::<SpinnerModel>::builder()
-        .alt_screen(true) // Use alternate screen for cleaner display
-        .signal_handler(true) // Enable Ctrl+C handling
+        .signal_handler(true)
         .build()?;
 
     // Run the program
-    program.run().await?;
-
-    println!("Spinner stopped.");
+    if let Err(err) = program.run().await {
+        println!("{}", err);
+        std::process::exit(1);
+    }
 
     Ok(())
 }

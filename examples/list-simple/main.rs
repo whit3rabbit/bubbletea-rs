@@ -1,6 +1,7 @@
 use bubbletea_rs::{Cmd, KeyMsg, Model as BubbleTeaModel, Msg, WindowSizeMsg};
 use bubbletea_widgets::list::{Item, ItemDelegate, Model as List};
-use crossterm::event::{KeyCode, KeyModifiers};
+use bubbletea_widgets::key::{new_binding, with_keys_str, with_help, matches_binding, Binding};
+use bubbletea_widgets::paginator::Type as PaginatorType;
 use lipgloss_extras::lipgloss::{Color, Style};
 use std::fmt::Display;
 
@@ -69,11 +70,38 @@ impl ItemDelegate<FoodItem> for FoodDelegate {
     }
 }
 
+// Key bindings for the application
+struct AppKeyMap {
+    quit: Binding,
+    force_quit: Binding,
+    select: Binding,
+}
+
+impl Default for AppKeyMap {
+    fn default() -> Self {
+        Self {
+            quit: new_binding(vec![
+                with_keys_str(&["q"]),
+                with_help("q", "quit"),
+            ]),
+            force_quit: new_binding(vec![
+                with_keys_str(&["ctrl+c"]),
+                with_help("ctrl+c", "force quit"),
+            ]),
+            select: new_binding(vec![
+                with_keys_str(&["enter"]),
+                with_help("enter", "select item"),
+            ]),
+        }
+    }
+}
+
 // Main application model
 struct Model {
     list: List<FoodItem>,
     choice: Option<String>,
     quitting: bool,
+    keymap: AppKeyMap,
 }
 
 impl Model {
@@ -93,23 +121,24 @@ impl Model {
 
         let delegate = FoodDelegate::default();
         let mut list = List::new(items, delegate, 80, 30) // Much larger dimensions to force vertical
-            .with_title("What do you want for dinner?");
+            .with_title("What do you want for dinner?")
+            .with_pagination_type(PaginatorType::Dots); // Use dots pagination to match Go version
 
         // Note: Filtering behavior will be handled by the widget defaults
 
-        // Configure list styles to match Go example exactly
-        let title_style = Style::new().margin_left(2);
-        let pagination_style = Style::new().padding_left(4);
-        let help_style = Style::new().padding_left(4).padding_bottom(1);
-
-        list.styles.title = title_style;
-        list.styles.pagination_style = pagination_style;
-        list.styles.help_style = help_style;
+        // Configure list styles to match Go example exactly using the v0.1.8 API
+        {
+            let styles = list.styles_mut();
+            styles.title = Style::new().margin_left(2);
+            styles.pagination_style = Style::new().padding_left(4);
+            styles.help_style = Style::new().padding_left(4).padding_bottom(1);
+        }
 
         Self {
             list,
             choice: None,
             quitting: false,
+            keymap: AppKeyMap::default(),
         }
     }
 }
@@ -133,24 +162,22 @@ impl BubbleTeaModel for Model {
             return None;
         }
 
-        // Handle key messages
+        // Handle key messages using semantic bindings
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            match &key_msg.key {
-                KeyCode::Char('q') => {
-                    self.quitting = true;
-                    return Some(bubbletea_rs::quit());
+            // Check semantic key bindings instead of raw key codes
+            if matches_binding(key_msg, &self.keymap.quit) {
+                self.quitting = true;
+                return Some(bubbletea_rs::quit());
+            }
+            else if matches_binding(key_msg, &self.keymap.force_quit) {
+                self.quitting = true;
+                return Some(bubbletea_rs::quit());
+            }
+            else if matches_binding(key_msg, &self.keymap.select) {
+                if let Some(item) = self.list.selected_item() {
+                    self.choice = Some(item.0.clone());
                 }
-                KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.quitting = true;
-                    return Some(bubbletea_rs::quit());
-                }
-                KeyCode::Enter => {
-                    if let Some(item) = self.list.selected_item() {
-                        self.choice = Some(item.0.clone());
-                    }
-                    return Some(bubbletea_rs::quit());
-                }
-                _ => {}
+                return Some(bubbletea_rs::quit());
             }
         }
 

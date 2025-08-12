@@ -1,223 +1,147 @@
-//! Spinners Example
+//! Spinner Example
 //!
-//! Demonstrates:
-//! - Multiple spinner styles and animations
-//! - Navigation between different spinner types
-//! - Professional spinner showcase with different characteristics
-//! - Keyboard navigation to browse spinner gallery
-//! - Different timing intervals for various spinner styles
+//! A simple program demonstrating spinner animations, matching the Go Bubble Tea 
+//! spinner example with enhanced functionality.
 //!
-//! This example shows a collection of different spinner animations
-//! that users can navigate through, demonstrating the variety of
-//! loading indicators available in terminal applications.
+//! Features:
+//! - Simple loading spinner with pink styling (matches Go version)
+//! - Help menu to switch between different spinner types
+//! - Clean interface matching the original Go version
+//! - Multiple spinner styles with number key selection
 
 use bubbletea_rs::{quit, tick, Cmd, KeyMsg, Model, Msg, Program};
-use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
+use crossterm::event::{KeyCode, KeyModifiers};
+use lipgloss_extras::lipgloss::{Color, Style};
 use std::time::Duration;
 
 /// Message for spinner animation ticks
 #[derive(Debug)]
 pub struct SpinnerTickMsg;
 
-/// Different spinner styles available in the gallery
-#[derive(Debug, Clone, PartialEq)]
-pub enum SpinnerStyle {
+/// Available spinner types that can be selected
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SpinnerType {
     Line,
-    Dots,
-    MiniDots,
+    Dot,
+    MiniDot,
     Jump,
     Pulse,
     Points,
     Globe,
     Moon,
     Monkey,
-    Arc,
-    Bounce,
-    Clock,
 }
 
-impl SpinnerStyle {
-    /// Get all available spinner styles
-    pub fn all() -> Vec<SpinnerStyle> {
-        vec![
-            SpinnerStyle::Line,
-            SpinnerStyle::Dots,
-            SpinnerStyle::MiniDots,
-            SpinnerStyle::Jump,
-            SpinnerStyle::Pulse,
-            SpinnerStyle::Points,
-            SpinnerStyle::Globe,
-            SpinnerStyle::Moon,
-            SpinnerStyle::Monkey,
-            SpinnerStyle::Arc,
-            SpinnerStyle::Bounce,
-            SpinnerStyle::Clock,
+impl SpinnerType {
+    /// Get all available spinner types - matching Go spinners order
+    fn all() -> &'static [SpinnerType] {
+        &[
+            SpinnerType::Line,
+            SpinnerType::Dot,
+            SpinnerType::MiniDot,
+            SpinnerType::Jump,
+            SpinnerType::Pulse,
+            SpinnerType::Points,
+            SpinnerType::Globe,
+            SpinnerType::Moon,
+            SpinnerType::Monkey,
         ]
     }
 
-    /// Get the animation frames for this spinner style
-    pub fn frames(&self) -> &'static [&'static str] {
+    /// Get the animation frames for this spinner type
+    fn frames(self) -> &'static [&'static str] {
         match self {
-            SpinnerStyle::Line => &["|", "/", "-", "\\"],
-            SpinnerStyle::Dots => &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-            SpinnerStyle::MiniDots => &["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"],
-            SpinnerStyle::Jump => &["⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"],
-            SpinnerStyle::Pulse => &[
-                "█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▎", "▍", "▌", "▋", "▊", "▉",
-            ],
-            SpinnerStyle::Points => &["∙∙∙", "●∙∙", "∙●∙", "∙∙●", "∙∙∙"],
-            SpinnerStyle::Globe => &["🌍", "🌎", "🌏"],
-            SpinnerStyle::Moon => &["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
-            SpinnerStyle::Monkey => &["🙈", "🙉", "🙊", "🐵"],
-            SpinnerStyle::Arc => &["◜", "◠", "◝", "◞", "◡", "◟"],
-            SpinnerStyle::Bounce => &["⠁", "⠂", "⠄", "⠂"],
-            SpinnerStyle::Clock => &[
-                "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛",
-            ],
+            SpinnerType::Line => &["|", "/", "-", "\\"],
+            SpinnerType::Dot => &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+            SpinnerType::MiniDot => &["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"],
+            SpinnerType::Jump => &["⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"],
+            SpinnerType::Pulse => &["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▎", "▍", "▌", "▋", "▊", "▉"],
+            SpinnerType::Points => &["∙∙∙", "●∙∙", "∙●∙", "∙∙●", "∙∙∙"],
+            SpinnerType::Globe => &["🌍", "🌎", "🌏"],
+            SpinnerType::Moon => &["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
+            SpinnerType::Monkey => &["🙈", "🙉", "🙊", "🐵"],
         }
     }
 
-    /// Get the animation interval for this spinner style
-    pub fn interval(&self) -> Duration {
+    /// Get the animation interval for this spinner type
+    fn interval(self) -> Duration {
         match self {
-            SpinnerStyle::Line => Duration::from_millis(150),
-            SpinnerStyle::Dots => Duration::from_millis(100),
-            SpinnerStyle::MiniDots => Duration::from_millis(120),
-            SpinnerStyle::Jump => Duration::from_millis(130),
-            SpinnerStyle::Pulse => Duration::from_millis(80),
-            SpinnerStyle::Points => Duration::from_millis(400),
-            SpinnerStyle::Globe => Duration::from_millis(500),
-            SpinnerStyle::Moon => Duration::from_millis(200),
-            SpinnerStyle::Monkey => Duration::from_millis(300),
-            SpinnerStyle::Arc => Duration::from_millis(120),
-            SpinnerStyle::Bounce => Duration::from_millis(300),
-            SpinnerStyle::Clock => Duration::from_millis(500),
+            SpinnerType::Line => Duration::from_millis(150),
+            SpinnerType::Dot => Duration::from_millis(100),
+            SpinnerType::MiniDot => Duration::from_millis(120),
+            SpinnerType::Jump => Duration::from_millis(130),
+            SpinnerType::Pulse => Duration::from_millis(80),
+            SpinnerType::Points => Duration::from_millis(400),
+            SpinnerType::Globe => Duration::from_millis(500),
+            SpinnerType::Moon => Duration::from_millis(200),
+            SpinnerType::Monkey => Duration::from_millis(300),
         }
     }
 
-    /// Get the display name for this spinner style
-    pub fn name(&self) -> &'static str {
-        match self {
-            SpinnerStyle::Line => "Line",
-            SpinnerStyle::Dots => "Dots",
-            SpinnerStyle::MiniDots => "Mini Dots",
-            SpinnerStyle::Jump => "Jump",
-            SpinnerStyle::Pulse => "Pulse",
-            SpinnerStyle::Points => "Points",
-            SpinnerStyle::Globe => "Globe",
-            SpinnerStyle::Moon => "Moon",
-            SpinnerStyle::Monkey => "Monkey",
-            SpinnerStyle::Arc => "Arc",
-            SpinnerStyle::Bounce => "Bounce",
-            SpinnerStyle::Clock => "Clock",
-        }
-    }
-
-    /// Get a description for this spinner style
-    pub fn description(&self) -> &'static str {
-        match self {
-            SpinnerStyle::Line => "Classic rotating line",
-            SpinnerStyle::Dots => "Braille dot pattern",
-            SpinnerStyle::MiniDots => "Small braille dots",
-            SpinnerStyle::Jump => "Jumping braille pattern",
-            SpinnerStyle::Pulse => "Pulsing bar effect",
-            SpinnerStyle::Points => "Three-dot sequence",
-            SpinnerStyle::Globe => "Rotating earth emoji",
-            SpinnerStyle::Moon => "Moon phase cycle",
-            SpinnerStyle::Monkey => "See no evil monkeys",
-            SpinnerStyle::Arc => "Curved arc rotation",
-            SpinnerStyle::Bounce => "Bouncing dot",
-            SpinnerStyle::Clock => "Clock face animation",
-        }
-    }
 }
 
-/// Key bindings for the spinners example
+/// The application model
 #[derive(Debug)]
-pub struct KeyBindings {
-    pub quit: Binding,
-    pub quit_alt: Binding,
-    pub left: Binding,
-    pub right: Binding,
+pub struct SpinnerModel {
+    current_type: SpinnerType,
+    current_frame: usize,
+    quitting: bool,
+    error: Option<String>,
 }
 
-impl Default for KeyBindings {
-    fn default() -> Self {
+impl SpinnerModel {
+    fn new() -> Self {
         Self {
-            quit: new_binding(vec![
-                with_keys_str(&["q", "esc"]),
-                with_help("q", "quit"),
-            ]),
-            quit_alt: new_binding(vec![
-                with_keys_str(&["ctrl+c"]),
-                with_help("ctrl+c", "quit"),
-            ]),
-            left: new_binding(vec![
-                with_keys_str(&["left", "h"]),
-                with_help("h/←", "previous spinner"),
-            ]),
-            right: new_binding(vec![
-                with_keys_str(&["right", "l"]),
-                with_help("l/→", "next spinner"),
-            ]),
-        }
-    }
-}
-
-/// The application state
-#[derive(Debug)]
-pub struct SpinnersModel {
-    pub spinners: Vec<SpinnerStyle>,
-    pub current_index: usize,
-    pub current_frame: usize,
-    pub quitting: bool,
-    pub keys: KeyBindings,
-}
-
-impl SpinnersModel {
-    pub fn new() -> Self {
-        Self {
-            spinners: SpinnerStyle::all(),
-            current_index: 0,
+            current_type: SpinnerType::Line, // Default to Line like Go spinners version
             current_frame: 0,
             quitting: false,
-            keys: KeyBindings::default(),
+            error: None,
         }
     }
 
-    pub fn current_spinner(&self) -> &SpinnerStyle {
-        &self.spinners[self.current_index]
+    /// Get the current spinner frame as styled text
+    fn current_spinner_frame(&self) -> String {
+        let frames = self.current_type.frames();
+        let frame = frames[self.current_frame % frames.len()];
+        
+        // Apply blue styling (#69) to match Go spinners version
+        let style = Style::new().foreground(Color::from("69"));
+        style.render(frame)
     }
 
-    pub fn current_frame_text(&self) -> &str {
-        let frames = self.current_spinner().frames();
-        frames[self.current_frame % frames.len()]
-    }
-
-    pub fn advance_frame(&mut self) {
-        let frames = self.current_spinner().frames();
+    /// Advance to the next frame
+    fn advance_frame(&mut self) {
+        let frames = self.current_type.frames();
         self.current_frame = (self.current_frame + 1) % frames.len();
     }
 
-    pub fn previous_spinner(&mut self) {
-        if self.current_index > 0 {
-            self.current_index -= 1;
+    /// Move to previous spinner
+    fn previous_spinner(&mut self) {
+        let all_spinners = SpinnerType::all();
+        let current_index = all_spinners.iter().position(|&s| s == self.current_type).unwrap_or(0);
+        let new_index = if current_index == 0 {
+            all_spinners.len() - 1
         } else {
-            self.current_index = self.spinners.len() - 1;
-        }
+            current_index - 1
+        };
+        self.current_type = all_spinners[new_index];
         self.current_frame = 0; // Reset animation
     }
 
-    pub fn next_spinner(&mut self) {
-        self.current_index = (self.current_index + 1) % self.spinners.len();
+    /// Move to next spinner  
+    fn next_spinner(&mut self) {
+        let all_spinners = SpinnerType::all();
+        let current_index = all_spinners.iter().position(|&s| s == self.current_type).unwrap_or(0);
+        let new_index = (current_index + 1) % all_spinners.len();
+        self.current_type = all_spinners[new_index];
         self.current_frame = 0; // Reset animation
     }
 }
 
-impl Model for SpinnersModel {
+impl Model for SpinnerModel {
     fn init() -> (Self, Option<Cmd>) {
-        let model = SpinnersModel::new();
-        let interval = model.current_spinner().interval();
+        let model = SpinnerModel::new();
+        let interval = model.current_type.interval();
 
         // Start the spinner animation
         let cmd = tick(interval, |_| Box::new(SpinnerTickMsg) as Msg);
@@ -229,28 +153,33 @@ impl Model for SpinnersModel {
         if msg.downcast_ref::<SpinnerTickMsg>().is_some() {
             if !self.quitting {
                 self.advance_frame();
-                let interval = self.current_spinner().interval();
+                let interval = self.current_type.interval();
                 return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
             }
         }
 
-        // Handle keyboard input using key bindings
+        // Handle keyboard input
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            if self.keys.quit.matches(key_msg) || self.keys.quit_alt.matches(key_msg) {
-                self.quitting = true;
-                return Some(quit());
-            }
-            if self.keys.left.matches(key_msg) {
-                self.previous_spinner();
-                // Restart animation with new spinner's interval
-                let interval = self.current_spinner().interval();
-                return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
-            }
-            if self.keys.right.matches(key_msg) {
-                self.next_spinner();
-                // Restart animation with new spinner's interval
-                let interval = self.current_spinner().interval();
-                return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
+            match key_msg.key {
+                KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.quitting = true;
+                    return Some(quit());
+                }
+                KeyCode::Char('q') | KeyCode::Esc => {
+                    self.quitting = true;
+                    return Some(quit());
+                }
+                KeyCode::Char('h') | KeyCode::Left => {
+                    self.previous_spinner();
+                    let interval = self.current_type.interval();
+                    return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
+                }
+                KeyCode::Char('l') | KeyCode::Right => {
+                    self.next_spinner();
+                    let interval = self.current_type.interval();
+                    return Some(tick(interval, |_| Box::new(SpinnerTickMsg) as Msg));
+                }
+                _ => {}
             }
         }
 
@@ -258,58 +187,56 @@ impl Model for SpinnersModel {
     }
 
     fn view(&self) -> String {
-        let spinner = self.current_spinner();
-        let frame = self.current_frame_text();
-
-        // Some spinners need no gap, others need a space
-        let gap = match spinner {
-            SpinnerStyle::Dots | SpinnerStyle::MiniDots => "",
-            _ => " ",
-        };
-
-        let mut view = String::new();
-        view.push_str(&format!("\n {}{}Spinning...\n\n", frame, gap));
-
-        // Show spinner info
-        view.push_str(&format!(
-            " Style: {} ({}/{})\n",
-            spinner.name(),
-            self.current_index + 1,
-            self.spinners.len()
-        ));
-        view.push_str(&format!(" Description: {}\n", spinner.description()));
-        view.push_str(&format!(
-            " Interval: {}ms\n",
-            spinner.interval().as_millis()
-        ));
-        view.push_str(&format!(" Frames: {}\n\n", spinner.frames().len()));
-
-        // Help text
-        view.push_str(" h/l, ←/→: change spinner • q: exit\n");
-
-        if self.quitting {
-            view.push('\n');
+        if let Some(error) = &self.error {
+            return format!("Error: {}", error);
         }
 
-        view
+        let mut s = String::new();
+        
+        // Determine gap spacing based on spinner type (like Go version)
+        // In the Go version, index 1 (Dot) has no gap, all others have a space
+        let gap = match self.current_type {
+            SpinnerType::Dot => "",  // Dot spinner (index 1 in Go) needs no gap
+            _ => " ",                // All other spinners need a space
+        };
+        
+        // Main spinner display - matching Go spinners format exactly
+        let text_style = Style::new().foreground(Color::from("252"));
+        let spinning_text = text_style.render("Spinning...");
+        
+        s.push_str(&format!(
+            "\n  {}{}{}\n\n",
+            self.current_spinner_frame(),
+            gap,
+            spinning_text
+        ));
+        
+        // Help text - matching Go format exactly
+        let help_style = Style::new().foreground(Color::from("241"));
+        s.push_str(&help_style.render("  h/l, ←/→: change spinner • q: exit\n"));
+
+        if self.quitting {
+            s.push('\n');
+        }
+
+        s
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Starting spinners gallery...");
-    println!("Navigate through different spinner styles!");
+    println!("Starting spinner example...");
 
     // Create and run the program
-    let program = Program::<SpinnersModel>::builder()
-        .alt_screen(true) // Use alternate screen for cleaner display
-        .signal_handler(true) // Enable Ctrl+C handling
+    let program = Program::<SpinnerModel>::builder()
+        .alt_screen(true)
+        .signal_handler(true)
         .build()?;
 
-    // Run the program
+    // Run the program  
     program.run().await?;
 
-    println!("Spinners gallery closed.");
+    println!("Spinner example finished.");
 
     Ok(())
 }

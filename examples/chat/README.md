@@ -386,7 +386,7 @@ cargo test --example chat
 ```toml
 [dependencies]
 bubbletea-rs = "0.0.6"
-bubbletea-widgets = "0.1.6"
+bubbletea-widgets = "0.1.9"
 lipgloss-extras = { version = "0.0.8", features = ["full"] }
 crossterm = "0.29"
 tokio = { version = "1", features = ["full"] }

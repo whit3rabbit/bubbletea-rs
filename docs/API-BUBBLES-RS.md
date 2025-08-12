@@ -32,7 +32,7 @@ Add `bubbletea-widgets` to your `Cargo.toml`. You will also need `bubbletea-rs` 
 
 ```toml
 [dependencies]
-bubbletea-widgets = "0.1.6"
+bubbletea-widgets = "0.1.9"
 bubbletea-rs = "0.0.6"
 lipgloss-extras = { version = "0.0.8", features = ["full"] }
 ```
@@ -74,35 +74,264 @@ manage_focus(&mut input);
 
 ### Key Bindings: The `key` Module
 
-The `key` module provides a robust, type-safe system for managing keybindings. It allows you to define semantic actions (like "move up") and associate them with multiple physical key presses (e.g., the `up` arrow and `k`). This is essential for building accessible applications and for generating help views with the `Help` component.
+The `key` module provides a robust, type-safe system for managing keybindings that serves as a higher-level alternative to using `crossterm::event` directly. It allows you to define semantic actions (like "move up") and associate them with multiple physical key presses (e.g., the `up` arrow and `k`). This is essential for building accessible applications and for generating help views with the `Help` component.
 
-| Type / Trait   | Description                                                                    |
-| -------------- | ------------------------------------------------------------------------------ |
-| `struct Binding` | Represents a keybinding with associated keys, help text, and an enabled state. |
-| `struct KeyPress`| A type-safe representation of a key press (`KeyCode` + `KeyModifiers`).        |
-| `trait KeyMap`   | An interface for components to expose their keybindings to the `Help` component. |
+**⭐ Recommended Approach**: Use the `key` module's binding system instead of raw `crossterm::event::KeyCode` matching for better maintainability, help integration, and consistent key handling patterns across your application.
 
-**Usage Example:**
+#### Why Use the Key API Instead of Crossterm Directly?
 
+**Traditional Crossterm Approach** (❌ Not Recommended):
 ```rust
-use bubbletea_widgets::key::{Binding, KeyMap};
-use bubbletea_rs::{KeyMsg, Model as BubbleTeaModel};
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::{KeyCode, KeyModifiers, KeyEvent};
+use bubbletea_rs::{KeyMsg, Msg};
 
+// Manual key matching - brittle and hard to maintain
+fn handle_input(&mut self, msg: &Msg) {
+    if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
+        match (key_msg.key, key_msg.modifiers) {
+            (KeyCode::Char('q'), KeyModifiers::NONE) | 
+            (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+                // Quit logic - hard to document for help
+            },
+            (KeyCode::Up, KeyModifiers::NONE) | 
+            (KeyCode::Char('k'), KeyModifiers::NONE) => {
+                // Move up - duplicated logic everywhere
+            },
+            _ => {}
+        }
+    }
+}
+```
+
+**Key Module Approach** (✅ Recommended):
+```rust
+use bubbletea_widgets::key::{Binding, new_binding, with_keys_str, with_help, matches_binding};
+use bubbletea_rs::{KeyMsg, Msg};
+
+// Semantic, maintainable, and help-integrated approach
 struct AppKeyMap {
-    up: Binding,
     quit: Binding,
+    move_up: Binding,
 }
 
 impl Default for AppKeyMap {
     fn default() -> Self {
         Self {
-            up: Binding::new(vec![KeyCode::Up, KeyCode::Char('k')])
-                .with_help("↑/k", "move up"),
-            quit: Binding::new(vec![KeyCode::Char('q'), (KeyCode::Char('c'), KeyModifiers::CONTROL).into()])
-                .with_help("q/ctrl+c", "quit"),
+            quit: new_binding(vec![
+                with_keys_str(&["q", "ctrl+c"]),
+                with_help("q/ctrl+c", "quit application"),
+            ]),
+            move_up: new_binding(vec![
+                with_keys_str(&["up", "k"]),
+                with_help("↑/k", "move up"),
+            ]),
         }
     }
+}
+
+fn handle_input(&mut self, key_msg: &KeyMsg) {
+    if matches_binding(key_msg, &self.keymap.quit) {
+        // Quit logic - automatically documented for help
+    } else if matches_binding(key_msg, &self.keymap.move_up) {
+        // Move up - reusable binding across components
+    }
+}
+```
+
+**Benefits of the Key API:**
+- **Semantic Bindings**: Define what actions mean, not just what keys do
+- **Multiple Key Support**: One action can have multiple key combinations
+- **Automatic Help Generation**: Built-in integration with the `Help` component
+- **Consistency**: Same binding patterns work across all components
+- **Maintainability**: Change key bindings in one place
+- **Accessibility**: Easy to provide alternative key combinations
+
+#### Core Types
+
+| Type / Trait   | Description                                                                    |
+| -------------- | ------------------------------------------------------------------------------ |
+| `struct KeyPress` | A type-safe representation of a key press (`KeyCode` + `KeyModifiers`).        |
+| `struct Help`     | Help information for displaying keybinding documentation.                      |
+| `struct Binding`  | Represents a keybinding with associated keys, help text, and an enabled state. |
+| `trait KeyMap`    | An interface for components to expose their keybindings to the `Help` component. |
+
+#### KeyPress API
+
+The `KeyPress` struct represents a specific key press combining a `KeyCode` and `KeyModifiers`.
+
+**Constructors:**
+- `From<(KeyCode, KeyModifiers)>` - Create from tuple
+- `From<KeyCode>` - Create from KeyCode (no modifiers)  
+- `From<&str>` - Create from string representation
+
+**Supported String Formats:**
+- Simple keys: "enter", "tab", "esc", "space", "up", "down", "left", "right"
+- Function keys: "f1" through "f12"
+- Navigation: "home", "end", "pgup"/"pageup", "pgdown"/"pagedown"/"pgdn"
+- Special: "backspace", "delete"/"del", "insert"
+- Single characters: "a", "1", "?", "/"
+- Modifier combinations: "ctrl+c", "alt+f4", "shift+tab"
+- Complex combinations: "ctrl+alt+a"
+
+**Usage Examples:**
+
+```rust
+use bubbletea_widgets::key::KeyPress;
+use crossterm::event::{KeyCode, KeyModifiers};
+
+// From tuple
+let ctrl_c: KeyPress = (KeyCode::Char('c'), KeyModifiers::CONTROL).into();
+
+// From KeyCode
+let enter: KeyPress = KeyCode::Enter.into();
+
+// From string
+let escape: KeyPress = "esc".into();
+let alt_f4: KeyPress = "alt+f4".into();
+```
+
+#### Help API
+
+The `Help` struct contains human-readable keybinding documentation.
+
+**Fields:**
+- `key: String` - Human-readable key representation (e.g., "ctrl+s", "enter")
+- `desc: String` - Brief description of what the key binding does
+
+#### Binding API
+
+The `Binding` struct describes a set of keybindings and their associated help text.
+
+**Constructors:**
+
+| Method | Description |
+| ------ | ----------- |
+| `new<K: Into<KeyPress>>(keys: Vec<K>) -> Self` | Creates a new binding with specified keys |
+| `new_binding(opts: Vec<BindingOpt>) -> Self` | Creates a binding using builder options |
+
+**Builder Pattern Methods:**
+
+| Method | Description |
+| ------ | ----------- |
+| `with_help(key: impl Into<String>, desc: impl Into<String>) -> Self` | Sets help text |
+| `with_enabled(enabled: bool) -> Self` | Sets enabled state |
+| `with_disabled() -> Self` | Disables the binding |
+| `with_keys(keys: &[&str]) -> Self` | Sets keys from string array |
+
+**State Management:**
+
+| Method | Description |
+| ------ | ----------- |
+| `set_keys<K: Into<KeyPress>>(&mut self, keys: Vec<K>)` | Sets the keys (mutable) |
+| `set_help(&mut self, key: impl Into<String>, desc: impl Into<String>)` | Sets help text (mutable) |
+| `set_enabled(&mut self, enabled: bool)` | Sets enabled state (mutable) |
+| `unbind(&mut self)` | Removes all keys and help text |
+
+**Accessors:**
+
+| Method | Description |
+| ------ | ----------- |
+| `keys(&self) -> &[KeyPress]` | Returns the key presses |
+| `help(&self) -> &Help` | Returns the help information |
+| `enabled(&self) -> bool` | Returns true if enabled and has keys |
+
+**Matching:**
+
+| Method | Description |
+| ------ | ----------- |
+| `matches(&self, key_msg: &KeyMsg) -> bool` | Checks if a KeyMsg matches this binding |
+| `matches_any(key_msg: &KeyMsg, bindings: &[&Self]) -> bool` | Static method to check multiple bindings |
+
+#### KeyMap Trait
+
+Components implement `KeyMap` to provide help information to the `Help` component.
+
+**Required Methods:**
+
+| Method | Description |
+| ------ | ----------- |
+| `short_help(&self) -> Vec<&Binding>` | Returns bindings for single-line help |
+| `full_help(&self) -> Vec<Vec<&Binding>>` | Returns organized bindings for multi-column help |
+
+#### Builder Functions
+
+**Primary Builders:**
+
+| Function | Description |
+| -------- | ----------- |
+| `new_binding(opts: Vec<BindingOpt>) -> Binding` | Go-style binding creation |
+| `with_keys_str(keys: &[&str]) -> BindingOpt` | Builder option to set keys from strings |
+| `with_keys<K: Into<KeyPress>>(keys: Vec<K>) -> BindingOpt` | Builder option to set keys from KeyPress values |
+| `with_help(key: impl Into<String>, desc: impl Into<String>) -> BindingOpt` | Builder option to set help text |
+| `with_disabled() -> BindingOpt` | Builder option to disable the binding |
+
+**Utility Functions:**
+
+| Function | Description |
+| -------- | ----------- |
+| `matches(key_msg: &KeyMsg, bindings: &[&Binding]) -> bool` | Check if KeyMsg matches any binding |
+| `matches_binding(key_msg: &KeyMsg, binding: &Binding) -> bool` | Check if KeyMsg matches specific binding |
+| `parse_key_string(s: &str) -> KeyPress` | Parse string representation into KeyPress |
+
+**Complete Usage Example:**
+
+```rust
+use bubbletea_widgets::key::{Binding, KeyMap, new_binding, with_keys_str, with_help, matches_binding};
+use bubbletea_rs::{KeyMsg, Model as BubbleTeaModel};
+
+struct AppKeyMap {
+    up: Binding,
+    down: Binding,
+    quit: Binding,
+    save: Binding,
+}
+
+impl Default for AppKeyMap {
+    fn default() -> Self {
+        Self {
+            up: new_binding(vec![
+                with_keys_str(&["up", "k"]),
+                with_help("↑/k", "move up"),
+            ]),
+            down: new_binding(vec![
+                with_keys_str(&["down", "j"]),
+                with_help("↓/j", "move down"),
+            ]),
+            quit: new_binding(vec![
+                with_keys_str(&["q", "ctrl+c"]),
+                with_help("q/ctrl+c", "quit"),
+            ]),
+            save: new_binding(vec![
+                with_keys_str(&["ctrl+s"]),
+                with_help("ctrl+s", "save file"),
+            ]),
+        }
+    }
+}
+
+impl KeyMap for AppKeyMap {
+    fn short_help(&self) -> Vec<&Binding> {
+        vec![&self.up, &self.down, &self.quit]
+    }
+
+    fn full_help(&self) -> Vec<Vec<&Binding>> {
+        vec![
+            vec![&self.up, &self.down],      // Navigation column
+            vec![&self.save, &self.quit],    // File operations column
+        ]
+    }
+}
+
+// Usage in update loop
+fn handle_keys(&mut self, key_msg: &KeyMsg) -> Option<Cmd> {
+    if matches_binding(key_msg, &self.keymap.quit) {
+        return Some(bubbletea_rs::quit());
+    }
+    if matches_binding(key_msg, &self.keymap.save) {
+        // Handle save...
+        return None;
+    }
+    None
 }
 ```
 
@@ -339,11 +568,12 @@ Creates a new text input with default settings.
 
 ```rust
 use bubbletea_widgets::prelude::*;
+use bubbletea_widgets::key::{Binding, new_binding, with_keys_str, with_help, matches_binding};
 use bubbletea_rs::{Cmd, KeyMsg, Model as BubbleTeaModel, Msg};
-use crossterm::event::KeyCode;
 
 struct App {
     text_input: TextInput,
+    enter_key: Binding,
 }
 
 impl BubbleTeaModel for App {
@@ -351,12 +581,16 @@ impl BubbleTeaModel for App {
         let mut ti = textinput_new();
         ti.set_placeholder("Enter your name...");
         let cmd = ti.focus();
-        (Self { text_input: ti }, Some(cmd))
+        let enter_key = new_binding(vec![
+            with_keys_str(&["enter"]),
+            with_help("enter", "submit"),
+        ]);
+        (Self { text_input: ti, enter_key }, Some(cmd))
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            if key_msg.key == KeyCode::Enter {
+            if matches_binding(key_msg, &self.enter_key) {
                 return Some(bubbletea_rs::quit());
             }
         }
@@ -540,11 +774,14 @@ Creates a new help model.
 
 ```rust
 use bubbletea_widgets::prelude::*;
+use bubbletea_widgets::key::{Binding, KeyMap, new_binding, with_keys_str, with_help, matches_binding};
 use bubbletea_rs::{KeyMsg, Model as BubbleTeaModel, Msg};
-use crossterm::event::KeyCode;
 
 // 1. Define your KeyMap
-struct AppKeyMap { help: Binding, }
+struct AppKeyMap { 
+    help: Binding,
+}
+
 // 2. Implement the help::KeyMap trait
 impl KeyMap for AppKeyMap {
     fn short_help(&self) -> Vec<&Binding> { vec![&self.help] }
@@ -558,15 +795,20 @@ struct App {
 
 impl BubbleTeaModel for App {
     fn init() -> (Self, Option<bubbletea_rs::Cmd>) {
+        let help_binding = new_binding(vec![
+            with_keys_str(&["?"]),
+            with_help("?", "toggle help"),
+        ]);
+        
         (Self {
-            keymap: AppKeyMap { help: Binding::new(vec![KeyCode::Char('?')]).with_help("?", "help") },
+            keymap: AppKeyMap { help: help_binding },
             help: HelpModel::new(),
         }, None)
     }
 
     fn update(&mut self, msg: Msg) -> Option<bubbletea_rs::Cmd> {
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            if self.keymap.help.matches(key_msg) {
+            if matches_binding(key_msg, &self.keymap.help) {
                 self.help.show_all = !self.help.show_all;
             }
         }
@@ -593,6 +835,48 @@ Creates a new list. Requires items that implement the `Item` trait and a delegat
 - **`trait Item`**: Must implement `Display` and `filter_value()`. `DefaultItem` is provided.
 - **`trait ItemDelegate`**: Controls how items are rendered. `DefaultDelegate` is provided.
 
+#### Enhanced ItemDelegate Trait
+
+The `ItemDelegate` trait now includes callback methods for enhanced interactivity:
+
+| Method                                      | Description                                              |
+| ------------------------------------------- | -------------------------------------------------------- |
+| `render(&self, m: &Model<I>, index: usize, item: &I) -> String` | Renders an item for display.                            |
+| `height(&self) -> usize`                   | Returns the height in lines each item occupies.         |
+| `spacing(&self) -> usize`                  | Returns spacing between items.                          |
+| `update(&self, msg: &Msg, m: &mut Model<I>) -> Option<Cmd>` | Handles custom update logic.                            |
+| `short_help(&self) -> Vec<Binding>`        | Returns key bindings for short help view.               |
+| `full_help(&self) -> Vec<Vec<Binding>>`    | Returns organized key bindings for full help view.      |
+| `on_select(&self, index: usize, item: &I) -> Option<Cmd>` | Called when an item is selected (Enter key).            |
+| `on_remove(&self, index: usize, item: &I) -> Option<Cmd>` | Called before an item is removed.                       |
+| `can_remove(&self, index: usize, item: &I) -> bool` | Determines if an item can be removed.                   |
+
+All callback methods have default implementations that return `None` or appropriate defaults, ensuring non-breaking compatibility.
+
+#### Built-in Key Bindings
+
+The List component comes with a comprehensive set of built-in key bindings via `ListKeyMap`:
+
+**Navigation**:
+- `↑/k` - Move up one item
+- `↓/j` - Move down one item  
+- `→/l/pgdn` - Next page
+- `←/h/pgup` - Previous page
+- `g/home` - Go to start
+- `G/end` - Go to end
+
+**Filtering**:
+- `/` - Start filtering
+- `esc` - Cancel/clear filter
+- `enter/tab` - Accept filter
+
+**System**:
+- `?` - Toggle help
+- `q/esc` - Quit
+- `ctrl+c` - Force quit
+
+You can access and customize these through the `keymap` field of your list model or create custom key bindings using the `key` module.
+
 #### Public API
 
 | Method                                      | Description                                              |
@@ -600,6 +884,38 @@ Creates a new list. Requires items that implement the `Item` trait and a delegat
 | `update(&mut self, msg: Msg) -> Option<Cmd>` | Handles navigation and filtering.                        |
 | `view(&self) -> String`                     | Renders the entire list component.                       |
 | `selected_item(&self) -> Option<&I>`        | Returns the currently selected item.                     |
+| **Direct Item Manipulation**                |                                                          |
+| `insert_item(&mut self, index: usize, item: I)` | Inserts an item at the specified index.                 |
+| `remove_item(&mut self, index: usize) -> I` | Removes and returns an item at the specified index.     |
+| `move_item(&mut self, from: usize, to: usize)` | Moves an item from one position to another.             |
+| `push_item(&mut self, item: I)`            | Adds an item to the end of the list.                    |
+| `pop_item(&mut self) -> Option<I>`          | Removes and returns the last item.                      |
+| **Items Access**                            |                                                          |
+| `items(&self) -> &[I]`                     | Gets a reference to all items.                          |
+| `items_mut(&mut self) -> &mut Vec<I>`      | Gets a mutable reference to all items.                  |
+| `items_len(&self) -> usize`                | Returns the number of items.                            |
+| `is_empty(&self) -> bool`                  | Returns true if the list has no items.                  |
+| **UI Component Toggles**                    |                                                          |
+| `show_title(&self) -> bool`                | Returns whether the title is shown.                     |
+| `set_show_title(&mut self, show: bool)`    | Sets whether to show the title.                         |
+| `toggle_title(&mut self) -> bool`          | Toggles title visibility and returns new state.         |
+| `show_status_bar(&self) -> bool`           | Returns whether the status bar is shown.                |
+| `set_show_status_bar(&mut self, show: bool)` | Sets whether to show the status bar.                    |
+| `toggle_status_bar(&mut self) -> bool`     | Toggles status bar visibility and returns new state.    |
+| `show_spinner(&self) -> bool`              | Returns whether the spinner is shown.                   |
+| `set_show_spinner(&mut self, show: bool)`  | Sets whether to show the spinner.                       |
+| `toggle_spinner(&mut self) -> bool`        | Toggles spinner visibility and returns new state.       |
+| `show_pagination(&self) -> bool`           | Returns whether pagination is shown.                    |
+| `set_show_pagination(&mut self, show: bool)` | Sets whether to show pagination.                        |
+| `toggle_pagination(&mut self) -> bool`     | Toggles pagination visibility and returns new state.    |
+| `show_help(&self) -> bool`                 | Returns whether help is shown.                          |
+| `set_show_help(&mut self, show: bool)`     | Sets whether to show help.                              |
+| `toggle_help(&mut self) -> bool`           | Toggles help visibility and returns new state.          |
+| **Styling Property Access**                 |                                                          |
+| `styles(&self) -> &ListStyles`             | Gets a reference to the current styles.                 |
+| `styles_mut(&mut self) -> &mut ListStyles` | Gets a mutable reference to the styles.                 |
+| `set_styles(&mut self, styles: ListStyles)` | Sets the list styles.                                   |
+| `with_styles(self, styles: ListStyles) -> Self` | Builder method to set styles.                           |
 | **Filter State Management**                 |                                                          |
 | `is_filtering(&self) -> bool`               | Returns true if filtering is active (Filtering or FilterApplied states). |
 | `clear_filter(&mut self) -> Option<Cmd>`   | Forces complete filter clearing in a single operation.  |
@@ -657,11 +973,12 @@ pub struct FilterStateInfo {
 
 ```rust
 use bubbletea_widgets::prelude::*;
+use bubbletea_widgets::key::{new_binding, with_keys_str, with_help, matches_binding};
 use bubbletea_rs::{KeyMsg, Model as BubbleTeaModel, Msg};
-use crossterm::event::KeyCode;
 
 struct App {
     list: List<ListDefaultItem>,
+    clear_filter_key: key::Binding,
 }
 
 impl BubbleTeaModel for App {
@@ -672,14 +989,19 @@ impl BubbleTeaModel for App {
             ListDefaultItem::new("Help", "Get assistance"),
         ];
         let list_model = List::new(items, ListDefaultDelegate::new(), 40, 10);
-        (Self { list: list_model }, None)
+        
+        let clear_filter_key = new_binding(vec![
+            with_keys_str(&["ctrl+c"]),
+            with_help("ctrl+c", "clear filter"),
+        ]);
+        
+        (Self { list: list_model, clear_filter_key }, None)
     }
 
     fn update(&mut self, msg: Msg) -> Option<bubbletea_rs::Cmd> {
         // Example: Clear filter with Ctrl+C
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            if key_msg.key == KeyCode::Char('c') 
-               && key_msg.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+            if matches_binding(key_msg, &self.clear_filter_key) {
                 if self.list.is_filtering() {
                     return self.list.clear_filter();
                 }
@@ -707,12 +1029,150 @@ impl BubbleTeaModel for App {
 }
 ```
 
-**Benefits of New API:**
+#### Advanced List Usage Example
 
-- **`is_filtering()`**: Simple boolean check for conditional UI logic
-- **`clear_filter()`**: Programmatic filter clearing without key simulation  
-- **`filter_state_info()`**: Rich state information for advanced applications
-- **Eliminates workarounds**: No need for double-escape patterns or state parsing
+This example demonstrates the new enhanced features including direct item manipulation, UI toggles, and delegate callbacks:
+
+```rust
+use bubbletea_widgets::prelude::*;
+use bubbletea_widgets::key::{new_binding, with_keys_str, with_help, matches_binding};
+use bubbletea_rs::{Cmd, KeyMsg, Model as BubbleTeaModel, Msg};
+
+// Custom delegate with callback methods
+struct CustomDelegate;
+
+impl<I: Item> ItemDelegate<I> for CustomDelegate {
+    fn render(&self, m: &Model<I>, index: usize, item: &I) -> String {
+        let cursor = if index == m.cursor() { ">" } else { " " };
+        format!("{} {}", cursor, item)
+    }
+    
+    fn height(&self) -> usize { 1 }
+    fn spacing(&self) -> usize { 0 }
+    
+    fn update(&self, _msg: &Msg, _m: &mut Model<I>) -> Option<Cmd> { None }
+    
+    fn on_select(&self, index: usize, item: &I) -> Option<Cmd> {
+        println!("Selected item '{}' at index {}", item, index);
+        None
+    }
+    
+    fn on_remove(&self, index: usize, item: &I) -> Option<Cmd> {
+        println!("Removing item '{}' at index {}", item, index);
+        None
+    }
+    
+    fn can_remove(&self, index: usize, _item: &I) -> bool {
+        // Don't allow removing the first item
+        index != 0
+    }
+}
+
+struct AppKeyMap {
+    add_item: key::Binding,
+    remove_item: key::Binding,
+    toggle_pagination: key::Binding,
+    toggle_help: key::Binding,
+}
+
+impl Default for AppKeyMap {
+    fn default() -> Self {
+        Self {
+            add_item: new_binding(vec![
+                with_keys_str(&["a"]),
+                with_help("a", "add item"),
+            ]),
+            remove_item: new_binding(vec![
+                with_keys_str(&["d"]),
+                with_help("d", "remove item"),
+            ]),
+            toggle_pagination: new_binding(vec![
+                with_keys_str(&["p"]),
+                with_help("p", "toggle pagination"),
+            ]),
+            toggle_help: new_binding(vec![
+                with_keys_str(&["h"]),
+                with_help("h", "toggle help"),
+            ]),
+        }
+    }
+}
+
+struct App {
+    list: List<ListDefaultItem>,
+    keymap: AppKeyMap,
+}
+
+impl BubbleTeaModel for App {
+    fn init() -> (Self, Option<Cmd>) {
+        let items = vec![
+            ListDefaultItem::new("Protected Item", "Cannot be removed"),
+            ListDefaultItem::new("Task 1", "Complete documentation"),
+            ListDefaultItem::new("Task 2", "Review pull requests"),
+        ];
+        
+        let list_model = List::new(items, CustomDelegate, 50, 15)
+            .with_show_pagination(true)  // Enable pagination
+            .with_show_help(true);       // Enable help display
+            
+        (Self { 
+            list: list_model, 
+            keymap: AppKeyMap::default(),
+        }, None)
+    }
+
+    fn update(&mut self, msg: Msg) -> Option<Cmd> {
+        if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
+            // Add new item with 'a'
+            if matches_binding(key_msg, &self.keymap.add_item) {
+                let new_item = ListDefaultItem::new("New Task", "Added dynamically");
+                self.list.push_item(new_item);
+                return None;
+            }
+            // Remove current item with 'd'
+            else if matches_binding(key_msg, &self.keymap.remove_item) {
+                let cursor = self.list.cursor();
+                if cursor < self.list.items_len() {
+                    self.list.remove_item(cursor);
+                }
+                return None;
+            }
+            // Toggle pagination with 'p'
+            else if matches_binding(key_msg, &self.keymap.toggle_pagination) {
+                self.list.toggle_pagination();
+                return None;
+            }
+            // Toggle help with 'h'
+            else if matches_binding(key_msg, &self.keymap.toggle_help) {
+                self.list.toggle_help();
+                return None;
+            }
+        }
+        
+        self.list.update(msg)
+    }
+
+    fn view(&self) -> String {
+        let mut output = self.list.view();
+        
+        output.push_str("\n\nControls:");
+        output.push_str("\na - add item, d - remove item");
+        output.push_str("\np - toggle pagination, h - toggle help");
+        
+        output
+    }
+}
+```
+
+**Benefits of Enhanced List API:**
+
+- **Direct Item Manipulation**: Full programmatic control over list contents with `insert_item`, `remove_item`, `move_item`, `push_item`, and `pop_item`
+- **UI Component Toggles**: Granular control over which UI elements are displayed (title, status bar, spinner, pagination, help)
+- **Styling Property Access**: Direct access to modify list appearance through `styles()`, `styles_mut()`, and builder patterns
+- **Enhanced Delegate Callbacks**: Rich interaction model with `on_select`, `on_remove`, and `can_remove` for custom behavior
+- **Filter State Management**: Comprehensive API with `is_filtering()`, `clear_filter()`, and `filter_state_info()` for advanced filter handling
+- **Non-Breaking Compatibility**: All new features use default implementations ensuring existing code continues to work
+- **Complete Feature Parity**: Now matches the full functionality of the original Go bubbles library
 
 ### Table
 
@@ -721,21 +1181,44 @@ A component for displaying and navigating tabular data with a fixed header.
 #### Creating a Table
 
 **`table::new(columns: Vec<Column>) -> Model`**
-Creates a new table with the specified column definitions.
+Creates a new table with the specified column definitions (standard constructor).
+
+**`table::Model::with_options(opts: Vec<TableOption>) -> Model`**
+Creates a new table with configuration options (Go-compatible constructor).
+
+#### Constructor Options
+
+| Function                                    | Description                                  |
+| ------------------------------------------- | -------------------------------------------- |
+| `with_columns(cols: Vec<Column>)`           | Sets the table columns during construction.  |
+| `with_rows(rows: Vec<Row>)`                 | Sets the table data rows during construction. |
+| `with_height(h: i32)`                       | Sets the table height during construction.   |
+| `with_width(w: i32)`                        | Sets the table width during construction.    |
+| `with_focused(f: bool)`                     | Sets the initial focus state during construction. |
+| `with_styles(s: Styles)`                    | Sets table styling during construction.      |
+| `with_key_map(km: TableKeyMap)`             | Sets custom key bindings during construction. |
 
 #### Core Concepts
 
 - **`struct Column { title: String, width: i32 }`**: Defines a table column.
 - **`struct Row { cells: Vec<String> }`**: Defines a table row.
+- **`type TableOption`**: Configuration option for flexible table construction.
 
 #### Public API
 
 | Method                                      | Description                                  |
 | ------------------------------------------- | -------------------------------------------- |
-| `with_rows(self, rows: Vec<Row>) -> Self`   | A builder-style method to add rows on creation. |
+| `with_rows(self, rows: Vec<Row>) -> Self`   | Builder-style method to add rows on creation. |
 | `update(&mut self, msg: Msg) -> Option<Cmd>` | Handles navigation.                          |
 | `view(&self) -> String`                     | Renders the table.                           |
 | `selected_row(&self) -> Option<&Row>`       | Gets the currently selected row.             |
+| `move_up(&mut self, n: usize)`              | Moves selection up by n rows.               |
+| `move_down(&mut self, n: usize)`            | Moves selection down by n rows.             |
+| `goto_top(&mut self)`                       | Moves selection to the first row.           |
+| `goto_bottom(&mut self)`                    | Moves selection to the last row.            |
+| `set_styles(&mut self, s: Styles)`          | Updates table styles and rebuilds viewport.  |
+| `update_viewport(&mut self)`                | Refreshes viewport content.                  |
+| `help_view(&self) -> String`                | Returns formatted help text for navigation.  |
 
 #### Usage Example
 
@@ -757,7 +1240,7 @@ impl BubbleTeaModel for App {
             table::Row::new(vec!["Tokyo".into(), "37M".into()]),
             table::Row::new(vec!["Delhi".into(), "32M".into()]),
         ];
-        let table_model = Table::new(columns).with_rows(rows);
+        let table_model = table::Model::new(columns).with_rows(rows);
         (Self { table: table_model }, None)
     }
 
@@ -771,22 +1254,79 @@ impl BubbleTeaModel for App {
 }
 ```
 
+**Alternative using with_options (Go-compatible pattern):**
+
+```rust
+use bubbletea_widgets::table::{Model, with_columns, with_rows, with_height, Column, Row};
+
+let table = Model::with_options(vec![
+    with_columns(vec![
+        Column::new("City", 15),
+        Column::new("Population", 10),
+    ]),
+    with_rows(vec![
+        Row::new(vec!["Tokyo".into(), "37M".into()]),
+        Row::new(vec!["Delhi".into(), "32M".into()]),
+    ]),
+    with_height(15),
+]);
+```
+
 ### FilePicker
 
-A component for navigating the filesystem and selecting a file or directory.
+A component for navigating the filesystem and selecting a file or directory with comprehensive filtering and configuration options.
 
 #### Creating a FilePicker
 
 **`filepicker::Model::init() -> (Model, Option<Cmd>)`**
 Initializes a new file picker, reading the current directory.
 
+**`filepicker::new() -> Model`**
+Creates a new file picker instance with default configuration.
+
+#### Public Structs
+
+**`ErrorMsg`**
+Represents an error that occurred during file operations.
+
+**`ReadDirMsg`**
+Message type for directory reading operations.
+
 #### Public API
 
 | Method                                         | Description                                                                  |
 | ---------------------------------------------- | ---------------------------------------------------------------------------- |
 | `update(&mut self, msg: Msg) -> Option<Cmd>`   | Handles navigation and selection.                                            |
-| `view(&self) -> String`                        | Renders the file list.                                                       |
-| `did_select_file(&self, msg: &Msg) -> (bool, Option<PathBuf>)` | Checks if a file was selected in the last update. Call this in your `update` loop. |
+| `view(&self) -> String`                        | Renders the file list with current configuration.                           |
+| `did_select_file(&self, msg: &Msg) -> (bool, String)` | Returns whether a user has selected a file and the file path. Only returns `true` for files that can actually be selected. |
+| `did_select_disabled_file(&self, msg: &Msg) -> (bool, String)` | Returns whether a user tried to select a disabled file and the file path. |
+| `set_height(&mut self, height: i32)`           | Sets the height of the file picker when auto_height is disabled.            |
+
+#### Configuration Fields
+
+| Field                    | Type                                           | Description                                    |
+| ------------------------ | ---------------------------------------------- | ---------------------------------------------- |
+| `allow_file_selection`   | `bool`                                        | Whether files can be selected                  |
+| `allow_dir_selection`    | `bool`                                        | Whether directories can be selected            |
+| `show_hidden`            | `bool`                                        | Whether to display hidden files                |
+| `show_permissions`       | `bool`                                        | Whether to display file permissions            |
+| `show_size`              | `bool`                                        | Whether to display file sizes                  |
+| `auto_height`            | `bool`                                        | Whether to automatically adjust height         |
+| `height`                 | `i32`                                         | Fixed height when auto_height is false         |
+| `max_entries`            | `Option<usize>`                               | Maximum number of entries to display           |
+| `min_height`             | `i32`                                         | Minimum height constraint                      |
+| `max_height`             | `i32`                                         | Maximum height constraint                      |
+| `dir_allowed`            | `Option<Box<dyn Fn(&DirEntry) -> bool>>`     | Filter for allowed directories                 |
+| `file_allowed`           | `Option<Box<dyn Fn(&DirEntry) -> bool>>`     | Filter for allowed files                       |
+
+#### Key Features
+
+- **Cross-platform hidden file detection**: Windows FILE_ATTRIBUTE_HIDDEN + Unix dotfiles
+- **Enhanced symlink resolution**: Proper handling of symbolic links with fallback
+- **Configurable filtering**: Custom functions for file and directory validation
+- **Responsive sizing**: Auto-height with min/max constraints
+- **Permission display**: Optional file permission information
+- **Size display**: Optional file size formatting
 
 #### Usage Example
 
@@ -807,8 +1347,8 @@ impl BubbleTeaModel for App {
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
-        if let (true, Some(path)) = self.file_picker.did_select_file(&msg) {
-            self.selected_file = Some(path.to_string_lossy().to_string());
+        if let (true, path) = self.file_picker.did_select_file(&msg) {
+            self.selected_file = Some(path);
             return Some(bubbletea_rs::quit());
         }
         self.file_picker.update(msg)

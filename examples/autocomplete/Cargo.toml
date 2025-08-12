@@ -15,5 +15,5 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 unicode-width = "0.2"
-bubbletea-widgets = "0.1.6"
+bubbletea-widgets = "0.1.9"
 lipgloss-extras = { version = "0.0.8", features = ["full"] }

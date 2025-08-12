@@ -1,7 +1,7 @@
 //! Composable Views Example
 //!
 //! This example demonstrates:
-//! - Composing multiple sub-models (timer and spinner) into a single application
+//! - Composing multiple sub-models (timer and spinner) using bubbletea-widgets
 //! - Focus management between different views using Tab key
 //! - Context-aware keyboard shortcuts ('n' behaves differently based on focus)
 //! - Visual styling with borders to indicate focus state
@@ -11,19 +11,13 @@
 //! with multiple styles. Users can switch focus between views and interact with
 //! each component independently.
 
-use bubbletea_rs::{batch, quit, tick, Cmd, KeyMsg, Model, Msg, Program};
+use bubbletea_rs::{batch, quit, Cmd, KeyMsg, Model, Msg, Program};
 use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
+use bubbletea_widgets::{spinner, timer};
 
-use lipgloss_extras::lipgloss::{Color, Style};
+use lipgloss_extras::lipgloss::{border, Color, Style};
+use lipgloss_extras::lipgloss::position::CENTER;
 use std::time::Duration;
-
-/// Message for timer ticks
-#[derive(Debug)]
-struct TimerTickMsg;
-
-/// Message for spinner animation ticks
-#[derive(Debug)]
-struct SpinnerTickMsg;
 
 /// Key bindings for the composable views example
 #[derive(Debug)]
@@ -64,11 +58,11 @@ enum SessionState {
     SpinnerView,
 }
 
-/// Different spinner styles available
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum SpinnerType {
+/// Available spinner styles (matching Go example)
+#[derive(Debug, Clone, Copy)]
+enum SpinnerStyle {
     Line,
-    Dot,
+    Dot, 
     MiniDot,
     Jump,
     Pulse,
@@ -78,149 +72,68 @@ enum SpinnerType {
     Monkey,
 }
 
-impl SpinnerType {
-    fn frames(&self) -> &'static [&'static str] {
+impl SpinnerStyle {
+    fn all() -> &'static [SpinnerStyle] {
+        &[
+            SpinnerStyle::Line,
+            SpinnerStyle::Dot,
+            SpinnerStyle::MiniDot, 
+            SpinnerStyle::Jump,
+            SpinnerStyle::Pulse,
+            SpinnerStyle::Points,
+            SpinnerStyle::Globe,
+            SpinnerStyle::Moon,
+            SpinnerStyle::Monkey,
+        ]
+    }
+
+    fn to_widget_spinner(&self) -> spinner::Spinner {
         match self {
-            SpinnerType::Line => &["|", "/", "-", "\\"],
-            SpinnerType::Dot => &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-            SpinnerType::MiniDot => &["⠋", "⠙", "⠚", "⠞", "⠖", "⠦", "⠴", "⠲", "⠳", "⠓"],
-            SpinnerType::Jump => &["⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"],
-            SpinnerType::Pulse => &["█", "▓", "▒", "░", "▒", "▓"],
-            SpinnerType::Points => &["∙∙∙", "●∙∙", "∙●∙", "∙∙●"],
-            SpinnerType::Globe => &["🌍", "🌎", "🌏"],
-            SpinnerType::Moon => &["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
-            SpinnerType::Monkey => &["🙈", "🙉", "🙊"],
-        }
-    }
-
-    fn interval(&self) -> Duration {
-        match self {
-            SpinnerType::Line => Duration::from_millis(130),
-            SpinnerType::Dot => Duration::from_millis(100),
-            SpinnerType::MiniDot => Duration::from_millis(100),
-            SpinnerType::Jump => Duration::from_millis(100),
-            SpinnerType::Pulse => Duration::from_millis(100),
-            SpinnerType::Points => Duration::from_millis(120),
-            SpinnerType::Globe => Duration::from_millis(130),
-            SpinnerType::Moon => Duration::from_millis(80),
-            SpinnerType::Monkey => Duration::from_millis(300),
-        }
-    }
-
-    fn next(&self) -> Self {
-        match self {
-            SpinnerType::Line => SpinnerType::Dot,
-            SpinnerType::Dot => SpinnerType::MiniDot,
-            SpinnerType::MiniDot => SpinnerType::Jump,
-            SpinnerType::Jump => SpinnerType::Pulse,
-            SpinnerType::Pulse => SpinnerType::Points,
-            SpinnerType::Points => SpinnerType::Globe,
-            SpinnerType::Globe => SpinnerType::Moon,
-            SpinnerType::Moon => SpinnerType::Monkey,
-            SpinnerType::Monkey => SpinnerType::Line,
+            SpinnerStyle::Line => spinner::LINE.clone(),
+            SpinnerStyle::Dot => spinner::DOT.clone(),
+            SpinnerStyle::MiniDot => spinner::MINI_DOT.clone(),
+            SpinnerStyle::Jump => spinner::JUMP.clone(),
+            SpinnerStyle::Pulse => spinner::PULSE.clone(),
+            SpinnerStyle::Points => spinner::POINTS.clone(),
+            SpinnerStyle::Globe => spinner::GLOBE.clone(),
+            SpinnerStyle::Moon => spinner::MOON.clone(),
+            SpinnerStyle::Monkey => spinner::MONKEY.clone(),
         }
     }
 }
 
-/// Timer sub-model that counts down from a given duration
-#[derive(Debug)]
-struct TimerModel {
-    duration: Duration,
-    remaining: Duration,
-    running: bool,
-}
-
-impl TimerModel {
-    fn new(duration: Duration) -> Self {
-        Self {
-            duration,
-            remaining: duration,
-            running: true,
-        }
-    }
-
-    fn tick(&mut self) {
-        if !self.running {
-            return;
-        }
-        
-        if self.remaining > Duration::ZERO {
-            self.remaining = self.remaining.saturating_sub(Duration::from_secs(1));
-            if self.remaining == Duration::ZERO {
-                self.running = false;
-            }
-        }
-    }
-
-    fn is_done(&self) -> bool {
-        self.remaining == Duration::ZERO
-    }
-
-    fn reset(&mut self) {
-        self.remaining = self.duration;
-        self.running = true;
-    }
-
-    fn view(&self) -> String {
-        if self.is_done() {
-            "✓".to_string()
-        } else {
-            let mins = self.remaining.as_secs() / 60;
-            let secs = self.remaining.as_secs() % 60;
-            format!("{:02}:{:02}", mins, secs)
-        }
-    }
-}
-
-/// Spinner sub-model
-#[derive(Debug)]
-struct SpinnerModel {
-    spinner_type: SpinnerType,
-    frame: usize,
-}
-
-impl SpinnerModel {
-    fn new() -> Self {
-        Self {
-            spinner_type: SpinnerType::Line,
-            frame: 0,
-        }
-    }
-
-    fn tick(&mut self) {
-        let frames = self.spinner_type.frames();
-        self.frame = (self.frame + 1) % frames.len();
-    }
-
-    fn next_spinner(&mut self) {
-        self.spinner_type = self.spinner_type.next();
-        self.frame = 0;
-    }
-
-    fn view(&self) -> String {
-        let frames = self.spinner_type.frames();
-        // Use lipgloss-extras spinner style with color #69
-        Style::new()
-            .foreground(Color::from("69"))
-            .render(frames[self.frame])
-    }
-}
-
-/// Main model that composes timer and spinner
+/// Main model that composes timer and spinner using bubbletea-widgets
 #[derive(Debug)]
 struct MainModel {
     state: SessionState,
-    timer: TimerModel,
-    spinner: SpinnerModel,
+    timer_model: timer::Model,
+    spinner_model: spinner::Model,
+    spinner_styles: Vec<SpinnerStyle>,
+    current_spinner_index: usize,
     keys: KeyBindings,
 }
 
 impl MainModel {
     fn new() -> Self {
+        let spinner_styles = SpinnerStyle::all().to_vec();
+        let current_spinner_index = 0;
+        
+        // Create timer widget (60 second countdown)
+        let timer_model = timer::new(Duration::from_secs(60));
+        
+        // Create spinner widget with faster animation than timer
+        // Using DOT spinner with custom faster interval (80ms vs 1000ms timer)
+        let spinner_model = spinner::new(&[
+            spinner::with_spinner(spinner_styles[current_spinner_index].to_widget_spinner()),
+            spinner::with_style(Style::new().foreground(Color::from("69"))), // Match Go example color
+        ]);
+
         Self {
             state: SessionState::TimerView,
-            timer: TimerModel::new(Duration::from_secs(60)),
-            spinner: SpinnerModel::new(),
+            timer_model,
+            spinner_model,
+            spinner_styles,
+            current_spinner_index,
             keys: KeyBindings::default(),
         }
     }
@@ -232,87 +145,47 @@ impl MainModel {
         }
     }
 
-    /// Render a view with border and centered content (simplified manual approach)
-    fn render_view(&self, content: &str, width: usize, height: usize, focused: bool) -> String {
-        if focused {
-            // Create a bordered box manually for focused view
-            let border_color = Color::from("69");
-            let top_border = Style::new().foreground(border_color.clone()).render(&format!("┌{}┐", "─".repeat(width - 2)));
-            let bottom_border = Style::new().foreground(border_color.clone()).render(&format!("└{}┘", "─".repeat(width - 2)));
-            
-            let mut lines = vec![top_border];
-            
-            // Add vertical padding and center the content
-            let padding_top = (height - 3) / 2; // -3 for top, content, bottom borders
-            for _ in 0..padding_top {
-                let line = Style::new().foreground(border_color.clone()).render(&format!("│{}│", " ".repeat(width - 2)));
-                lines.push(line);
-            }
-            
-            // Center the content line
-            let content_width = content.len();
-            let left_pad = if content_width >= width.saturating_sub(2) { 0 } else { (width - 2 - content_width) / 2 };
-            let right_pad = width.saturating_sub(2).saturating_sub(content_width).saturating_sub(left_pad);
-            let content_line = format!(
-                "{}{}{}{}",
-                Style::new().foreground(border_color.clone()).render("│"),
-                " ".repeat(left_pad),
-                content,
-                " ".repeat(right_pad)
-            ) + &Style::new().foreground(border_color.clone()).render("│");
-            lines.push(content_line);
-            
-            // Fill remaining vertical space
-            let remaining_height = height.saturating_sub(lines.len()).saturating_sub(1); // -1 for bottom border
-            for _ in 0..remaining_height {
-                let line = Style::new().foreground(border_color.clone()).render(&format!("│{}│", " ".repeat(width - 2)));
-                lines.push(line);
-            }
-            
-            lines.push(bottom_border);
-            lines.join("\n")
-        } else {
-            // No border, just center the content
-            let mut lines = Vec::new();
-            let padding_top = (height - 1) / 2;
-            
-            // Add top padding
-            for _ in 0..padding_top {
-                lines.push(" ".repeat(width));
-            }
-            
-            // Center content
-            let content_width = content.len();
-            let left_pad = if content_width >= width { 0 } else { (width - content_width) / 2 };
-            let right_pad = width.saturating_sub(content_width).saturating_sub(left_pad);
-            lines.push(format!("{}{}{}", " ".repeat(left_pad), content, " ".repeat(right_pad)));
-            
-            // Fill remaining space
-            let remaining = height.saturating_sub(lines.len());
-            for _ in 0..remaining {
-                lines.push(" ".repeat(width));
-            }
-            
-            lines.join("\n")
-        }
+    fn next_spinner(&mut self) {
+        self.current_spinner_index = (self.current_spinner_index + 1) % self.spinner_styles.len();
+        let new_spinner = self.spinner_styles[self.current_spinner_index].to_widget_spinner();
+        
+        // Create new spinner with updated style
+        self.spinner_model = spinner::new(&[
+            spinner::with_spinner(new_spinner),
+            spinner::with_style(Style::new().foreground(Color::from("69"))),
+        ]);
     }
 
+    /// Style for the focused model box
+    fn focused_style() -> Style {
+        Style::new()
+            .width(15)
+            .height(5)
+            .align_horizontal(CENTER)
+            .align_vertical(CENTER)
+            .border(border::normal_border())
+            .border_foreground(Color::from("69"))
+    }
 
+    /// Style for the unfocused model box  
+    fn model_style() -> Style {
+        Style::new()
+            .width(15)
+            .height(5)
+            .align_horizontal(CENTER)
+            .align_vertical(CENTER)
+            .border(border::hidden_border())
+    }
 }
 
 impl Model for MainModel {
     fn init() -> (Self, Option<Cmd>) {
         let model = MainModel::new();
         
-        // Use tick() re-arming pattern like the Go example
-        let timer_cmd = tick(Duration::from_secs(1), |_| {
-            Box::new(TimerTickMsg) as Msg
-        });
-        let spinner_cmd = tick(model.spinner.spinner_type.interval(), |_| {
-            Box::new(SpinnerTickMsg) as Msg
-        });
+        // Start timer only - spinners are passive widgets
+        let timer_cmd = model.timer_model.start();
         
-        (model, Some(batch(vec![timer_cmd, spinner_cmd])))
+        (model, Some(timer_cmd))
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
@@ -334,82 +207,63 @@ impl Model for MainModel {
                 // Context-aware 'n' key handling
                 match self.state {
                     SessionState::TimerView => {
-                        // Reset timer and immediately start new countdown
-                        self.timer.reset();
-                        cmds.push(tick(Duration::from_secs(1), |_| {
-                            Box::new(TimerTickMsg) as Msg
-                        }));
+                        // Reset and restart timer
+                        self.timer_model = timer::new(Duration::from_secs(60));
+                        cmds.push(self.timer_model.start());
                     }
                     SessionState::SpinnerView => {
-                        // Change spinner style and immediately start with new interval
-                        self.spinner.next_spinner();
-                        cmds.push(tick(self.spinner.spinner_type.interval(), |_| {
-                            Box::new(SpinnerTickMsg) as Msg
-                        }));
+                        // Change to next spinner style
+                        self.next_spinner();
+                        // Note: spinners are passive, no command needed
                     }
                 }
             }
         }
 
-        // Handle timer ticks - re-arm for next tick
-        if msg.downcast_ref::<TimerTickMsg>().is_some() {
-            self.timer.tick();
-            // Only re-arm if timer is still running
-            if !self.timer.is_done() {
-                cmds.push(tick(Duration::from_secs(1), |_| {
-                    Box::new(TimerTickMsg) as Msg
-                }));
-            }
+        // Update timer widget - let it process the message
+        if let Some(timer_cmd) = self.timer_model.update(msg) {
+            cmds.push(timer_cmd);
         }
 
-        // Handle spinner ticks - always re-arm for continuous animation
-        if msg.downcast_ref::<SpinnerTickMsg>().is_some() {
-            self.spinner.tick();
-            // Re-arm with current interval (allows dynamic speed changes)
-            cmds.push(tick(self.spinner.spinner_type.interval(), |_| {
-                Box::new(SpinnerTickMsg) as Msg
-            }));
-        }
+        // Spinner widgets are passive and don't need message updates
+        // They just render their current animation state
 
         // Return commands
-        if cmds.is_empty() {
-            None
-        } else if cmds.len() == 1 {
-            Some(cmds.into_iter().next().unwrap())
-        } else {
-            Some(batch(cmds))
+        match cmds.len() {
+            0 => None,
+            1 => Some(cmds.into_iter().next().unwrap()),
+            _ => Some(batch(cmds)),
         }
     }
 
     fn view(&self) -> String {
-        let timer_view = self.render_view(
-            &self.timer.view(),
-            15,
-            5,
-            self.state == SessionState::TimerView,
-        );
+        // Format timer display to match Go example (show as MM:SS or checkmark when done)
+        let timer_display = if self.timer_model.timedout() {
+            "✓".to_string()
+        } else {
+            let remaining = self.timer_model.view();
+            // Timer widget returns duration, format as MM:SS to match Go example
+            remaining
+        };
 
-        let spinner_view = self.render_view(
-            &self.spinner.view(),
-            15,
-            5,
-            self.state == SessionState::SpinnerView,
-        );
+        // Render timer view
+        let timer_view = if self.state == SessionState::TimerView {
+            Self::focused_style().render(&format!("{:>4}", timer_display))
+        } else {
+            Self::model_style().render(&format!("{:>4}", timer_display))
+        };
 
-        // Manual horizontal join since lipgloss-extras join_horizontal API is unclear
-        let timer_lines: Vec<&str> = timer_view.lines().collect();
-        let spinner_lines: Vec<&str> = spinner_view.lines().collect();
-        let max_lines = timer_lines.len().max(spinner_lines.len());
-        
-        let mut result_lines = Vec::new();
-        for i in 0..max_lines {
-            let timer_line = timer_lines.get(i).unwrap_or(&"");
-            let spinner_line = spinner_lines.get(i).unwrap_or(&"");
-            result_lines.push(format!("{}{}", timer_line, spinner_line));
-        }
-        let views = result_lines.join("\n");
+        // Render spinner view - the widget handles the animation and centering
+        let spinner_view = if self.state == SessionState::SpinnerView {
+            Self::focused_style().render(&self.spinner_model.view())
+        } else {
+            Self::model_style().render(&self.spinner_model.view())
+        };
 
-        // Help text with styling matching Go version helpStyle with Color("241")
+        // Join horizontally (side by side)
+        let views = format!("{}{}", timer_view, spinner_view);
+
+        // Help text with styling matching Go version
         let help_style = Style::new().foreground(Color::from("241"));
         let help = help_style.render(&format!(
             "tab: focus next • n: new {} • q: exit",
