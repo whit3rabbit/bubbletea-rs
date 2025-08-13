@@ -12,7 +12,7 @@ fn test_model_init() {
     // Should create a list with the expected title
     let view = model.view();
     assert!(view.contains("My Fave Things"));
-    
+
     // Should return an initial command to trigger window size request and rendering
     assert!(cmd.is_some());
 }
@@ -86,28 +86,28 @@ fn test_esc_key_clears_filter_then_quits() {
         key: KeyCode::Char('/'),
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let _cmd = model.update(slash_key);
-    
+
     // Now press Esc - should clear filter and NOT quit
     let esc_key = Box::new(KeyMsg {
         key: KeyCode::Esc,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let _cmd = model.update(esc_key);
-    
+
     // Should NOT return a quit command (should let widget handle filter clearing)
     // The widget will handle clearing the filter
-    
+
     // Press Esc again - now should quit since we're no longer filtering
     let esc_key2 = Box::new(KeyMsg {
         key: KeyCode::Esc,
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let cmd2 = model.update(esc_key2);
-    
+
     // Should return a quit command on second Esc press
     assert!(cmd2.is_some());
 }
@@ -130,33 +130,33 @@ fn test_window_size_message() {
 #[test]
 fn test_window_resizing_behavior() {
     let (mut model, _) = Model::init();
-    
+
     // Get initial view to ensure it works initially
     let _initial_view = model.view();
-    
+
     // Send different window sizes
     let small_size = Box::new(WindowSizeMsg {
         width: 40,
         height: 10,
     }) as Msg;
-    
+
     let large_size = Box::new(WindowSizeMsg {
         width: 200,
         height: 50,
     }) as Msg;
-    
+
     // Test small window
     let cmd = model.update(small_size);
     assert!(cmd.is_none());
-    
+
     let small_view = model.view();
-    
+
     // Test large window
     let cmd = model.update(large_size);
     assert!(cmd.is_none());
-    
+
     let large_view = model.view();
-    
+
     // Views should still work after window resizing
     assert!(!small_view.is_empty());
     assert!(!large_view.is_empty());
@@ -212,10 +212,10 @@ fn test_view_rendering() {
 
     // View should not be empty
     assert!(!view.is_empty());
-    
+
     // View should be properly formatted (has some structure)
     assert!(view.len() > 100); // Should have substantial content
-    
+
     // Should contain the title
     assert!(view.contains("My Fave Things"));
 }
@@ -224,36 +224,36 @@ fn test_view_rendering() {
 fn test_visual_comparison_with_go() {
     let (model, _) = Model::init();
     let view = model.view();
-    
+
     println!("\nVisual output of Rust implementation:");
     println!("=====================================");
     println!("{}", view);
     println!("=====================================");
-    
+
     // Key visual elements that should match the Go version:
-    
+
     // 1. Title should be present and styled
     assert!(view.contains("My Fave Things"));
-    
+
     // 2. First few items should be visible (matching Go output)
     assert!(view.contains("Raspberry Pi's"));
     assert!(view.contains("I have 'em all over my house"));
     assert!(view.contains("Nutella"));
     assert!(view.contains("It's good on toast"));
-    
+
     // 3. Should have item count status
     assert!(view.contains("/23 items"));
-    
+
     // 4. Should have help text at the bottom
     assert!(view.contains("↑/k"));
     assert!(view.contains("↓/j"));
     assert!(view.contains("filter"));
-    
+
     // 5. Should have proper margins/styling (docStyle.Margin(1, 2))
     // The view should have whitespace padding from the margins
     let lines: Vec<&str> = view.lines().collect();
     assert!(lines.len() > 5); // Should have multiple lines
-    
+
     // First and last lines should be mostly whitespace (margins)
     assert!(lines[0].trim().is_empty());
     assert!(lines[lines.len() - 1].trim().is_empty());
@@ -262,32 +262,32 @@ fn test_visual_comparison_with_go() {
 #[test]
 fn test_filtering_functionality() {
     let (mut model, _) = Model::init();
-    
+
     // Simulate pressing '/' to enter filter mode
     let slash_key = Box::new(KeyMsg {
         key: KeyCode::Char('/'),
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let _cmd = model.update(slash_key);
-    
+
     // Simulate typing 'n' to filter items
     let n_key = Box::new(KeyMsg {
         key: KeyCode::Char('n'),
         modifiers: KeyModifiers::NONE,
     }) as Msg;
-    
+
     let _cmd = model.update(n_key);
-    
+
     let filtered_view = model.view();
     println!("\nFiltered view after typing '/n':");
     println!("=====================================");
     println!("{}", filtered_view);
     println!("=====================================");
-    
+
     // Should show filtered results
     assert!(filtered_view.contains("filtered"));
-    
+
     // Text should be properly formatted (not broken up)
     // If filtering is working correctly, we should see clean text
     assert!(filtered_view.contains("Nutella") || filtered_view.contains("utella"));

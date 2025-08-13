@@ -13,9 +13,11 @@
 //! - Quit with 'q' or Ctrl+C
 
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model as BubbleTeaModel, Msg, Program};
-use bubbletea_widgets::key::{new_binding, with_keys_str, with_help, matches_binding, Binding, KeyMap};
+use bubbletea_widgets::help::{KeyMap as HelpKeyMap, Model as HelpModel};
+use bubbletea_widgets::key::{
+    matches_binding, new_binding, with_help, with_keys_str, Binding, KeyMap,
+};
 use bubbletea_widgets::stopwatch::{new_with_interval, Model as StopwatchModel};
-use bubbletea_widgets::help::{Model as HelpModel, KeyMap as HelpKeyMap};
 use std::time::Duration;
 
 /// Formats a duration to match Go's time.Duration.String() format for stopwatch display
@@ -25,7 +27,7 @@ fn format_duration_like_go(d: Duration) -> String {
     let minutes = (total_secs % 3600) / 60;
     let seconds = total_secs % 60;
     let millis = d.subsec_millis();
-    
+
     if hours > 0 {
         format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, millis)
     } else {
@@ -45,7 +47,7 @@ pub struct Model {
 #[derive(Debug, Clone)]
 pub struct Keymap {
     pub start: Binding,
-    pub stop: Binding,  
+    pub stop: Binding,
     pub reset: Binding,
     pub quit: Binding,
 }
@@ -53,18 +55,9 @@ pub struct Keymap {
 impl Keymap {
     pub fn new() -> Self {
         Self {
-            start: new_binding(vec![
-                with_keys_str(&["s"]),
-                with_help("s", "start"),
-            ]),
-            stop: new_binding(vec![
-                with_keys_str(&["s"]),
-                with_help("s", "stop"),
-            ]),
-            reset: new_binding(vec![
-                with_keys_str(&["r"]),
-                with_help("r", "reset"),
-            ]),
+            start: new_binding(vec![with_keys_str(&["s"]), with_help("s", "start")]),
+            stop: new_binding(vec![with_keys_str(&["s"]), with_help("s", "stop")]),
+            reset: new_binding(vec![with_keys_str(&["r"]), with_help("r", "reset")]),
             quit: new_binding(vec![
                 with_keys_str(&["ctrl+c", "q"]),
                 with_help("q", "quit"),
@@ -88,7 +81,7 @@ impl KeyMap for Keymap {
         bindings.push(&self.quit);
         bindings
     }
-    
+
     fn full_help(&self) -> Vec<Vec<&Binding>> {
         // Not used in this example - short help only
         vec![self.short_help()]
@@ -98,16 +91,16 @@ impl KeyMap for Keymap {
 impl Model {
     pub fn new() -> Self {
         let mut keymap = Keymap::new();
-        
+
         // Match Go's initial state: start is disabled since stopwatch starts running
         keymap.start.set_enabled(false);
-        
+
         // Create help model
         let mut help = HelpModel::new();
         help.show_all = false; // Use short help like Go version
-        
+
         Self {
-            // Match Go's NewWithInterval(time.Millisecond) 
+            // Match Go's NewWithInterval(time.Millisecond)
             stopwatch: new_with_interval(Duration::from_millis(1)),
             keymap,
             help,
@@ -121,7 +114,7 @@ impl HelpKeyMap for Model {
     fn short_help(&self) -> Vec<&Binding> {
         self.keymap.short_help()
     }
-    
+
     fn full_help(&self) -> Vec<Vec<&Binding>> {
         self.keymap.full_help()
     }
@@ -144,7 +137,9 @@ impl BubbleTeaModel for Model {
             } else if matches_binding(key, &self.keymap.reset) {
                 // Match Go's m.stopwatch.Reset()
                 return Some(self.stopwatch.reset());
-            } else if matches_binding(key, &self.keymap.start) || matches_binding(key, &self.keymap.stop) {
+            } else if matches_binding(key, &self.keymap.start)
+                || matches_binding(key, &self.keymap.stop)
+            {
                 // Match Go's key enabling logic
                 self.keymap.stop.set_enabled(!self.stopwatch.running());
                 self.keymap.start.set_enabled(self.stopwatch.running());
@@ -152,7 +147,7 @@ impl BubbleTeaModel for Model {
                 return Some(self.stopwatch.toggle());
             }
         }
-        
+
         // Handle stopwatch messages (ticks, etc.)
         // Match Go's: m.stopwatch, cmd = m.stopwatch.Update(msg)
         self.stopwatch.update(msg)
@@ -160,27 +155,25 @@ impl BubbleTeaModel for Model {
 
     fn view(&self) -> String {
         // Match Go's View() method exactly
-        
+
         // Note: you could further customize the time output by getting the
         // duration from m.stopwatch.Elapsed(), which returns a time.Duration, and
         // skip m.stopwatch.View() altogether.
         let mut s = format_duration_like_go(self.stopwatch.elapsed());
         s.push('\n');
-        
+
         if !self.quitting {
             s = format!("Elapsed: {}", s);
             s.push_str(&self.help.view(self));
         }
-        
+
         s
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let program = Program::<Model>::builder()
-        .signal_handler(true)
-        .build()?;
+    let program = Program::<Model>::builder().signal_handler(true).build()?;
 
     program.run().await?;
     Ok(())

@@ -1,6 +1,6 @@
 //! Spinner Example
 //!
-//! A simple program demonstrating spinner animations, matching the Go Bubble Tea 
+//! A simple program demonstrating spinner animations, matching the Go Bubble Tea
 //! spinner example with enhanced functionality.
 //!
 //! Features:
@@ -55,7 +55,9 @@ impl SpinnerType {
             SpinnerType::Dot => &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
             SpinnerType::MiniDot => &["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"],
             SpinnerType::Jump => &["⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"],
-            SpinnerType::Pulse => &["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▎", "▍", "▌", "▋", "▊", "▉"],
+            SpinnerType::Pulse => &[
+                "█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▎", "▍", "▌", "▋", "▊", "▉",
+            ],
             SpinnerType::Points => &["∙∙∙", "●∙∙", "∙●∙", "∙∙●", "∙∙∙"],
             SpinnerType::Globe => &["🌍", "🌎", "🌏"],
             SpinnerType::Moon => &["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
@@ -77,7 +79,6 @@ impl SpinnerType {
             SpinnerType::Monkey => Duration::from_millis(300),
         }
     }
-
 }
 
 /// The application model
@@ -103,7 +104,7 @@ impl SpinnerModel {
     fn current_spinner_frame(&self) -> String {
         let frames = self.current_type.frames();
         let frame = frames[self.current_frame % frames.len()];
-        
+
         // Apply blue styling (#69) to match Go spinners version
         let style = Style::new().foreground(Color::from("69"));
         style.render(frame)
@@ -118,7 +119,10 @@ impl SpinnerModel {
     /// Move to previous spinner
     fn previous_spinner(&mut self) {
         let all_spinners = SpinnerType::all();
-        let current_index = all_spinners.iter().position(|&s| s == self.current_type).unwrap_or(0);
+        let current_index = all_spinners
+            .iter()
+            .position(|&s| s == self.current_type)
+            .unwrap_or(0);
         let new_index = if current_index == 0 {
             all_spinners.len() - 1
         } else {
@@ -131,7 +135,10 @@ impl SpinnerModel {
     /// Move to next spinner  
     fn next_spinner(&mut self) {
         let all_spinners = SpinnerType::all();
-        let current_index = all_spinners.iter().position(|&s| s == self.current_type).unwrap_or(0);
+        let current_index = all_spinners
+            .iter()
+            .position(|&s| s == self.current_type)
+            .unwrap_or(0);
         let new_index = (current_index + 1) % all_spinners.len();
         self.current_type = all_spinners[new_index];
         self.current_frame = 0; // Reset animation
@@ -192,25 +199,25 @@ impl Model for SpinnerModel {
         }
 
         let mut s = String::new();
-        
+
         // Determine gap spacing based on spinner type (like Go version)
         // In the Go version, index 1 (Dot) has no gap, all others have a space
         let gap = match self.current_type {
-            SpinnerType::Dot => "",  // Dot spinner (index 1 in Go) needs no gap
-            _ => " ",                // All other spinners need a space
+            SpinnerType::Dot => "", // Dot spinner (index 1 in Go) needs no gap
+            _ => " ",               // All other spinners need a space
         };
-        
+
         // Main spinner display - matching Go spinners format exactly
         let text_style = Style::new().foreground(Color::from("252"));
         let spinning_text = text_style.render("Spinning...");
-        
+
         s.push_str(&format!(
             "\n  {}{}{}\n\n",
             self.current_spinner_frame(),
             gap,
             spinning_text
         ));
-        
+
         // Help text - matching Go format exactly
         let help_style = Style::new().foreground(Color::from("241"));
         s.push_str(&help_style.render("  h/l, ←/→: change spinner • q: exit\n"));
@@ -233,7 +240,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .signal_handler(true)
         .build()?;
 
-    // Run the program  
+    // Run the program
     program.run().await?;
 
     println!("Spinner example finished.");

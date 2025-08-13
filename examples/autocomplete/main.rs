@@ -50,7 +50,7 @@ struct GotReposErrMsg(String);
 // here we include only the app-level bindings we want surfaced in help.
 struct AppKeyMap {
     tab: key::Binding,
-    next: key::Binding,  
+    next: key::Binding,
     prev: key::Binding,
     quit: key::Binding,
 }
@@ -60,10 +60,13 @@ impl Default for AppKeyMap {
         Self {
             // These are handled by textinput but shown in help for discoverability
             tab: key::new_binding(vec![key::with_keys_str(&["tab"])]).with_help("tab", "complete"),
-            next: key::new_binding(vec![key::with_keys_str(&["ctrl+n"])]).with_help("ctrl+n", "next"),
-            prev: key::new_binding(vec![key::with_keys_str(&["ctrl+p"])]).with_help("ctrl+p", "prev"),
+            next: key::new_binding(vec![key::with_keys_str(&["ctrl+n"])])
+                .with_help("ctrl+n", "next"),
+            prev: key::new_binding(vec![key::with_keys_str(&["ctrl+p"])])
+                .with_help("ctrl+p", "prev"),
             // Quit is handled by our app after delegating the message to the input
-            quit: key::new_binding(vec![key::with_keys_str(&["esc", "enter", "ctrl+c"])]).with_help("esc", "quit"),
+            quit: key::new_binding(vec![key::with_keys_str(&["esc", "enter", "ctrl+c"])])
+                .with_help("esc", "quit"),
         }
     }
 }
@@ -72,7 +75,7 @@ impl help::KeyMap for AppKeyMap {
     fn short_help(&self) -> Vec<&key::Binding> {
         vec![&self.tab, &self.next, &self.prev, &self.quit]
     }
-    
+
     fn full_help(&self) -> Vec<Vec<&key::Binding>> {
         vec![vec![&self.tab, &self.next, &self.prev, &self.quit]]
     }
@@ -94,7 +97,7 @@ impl AutocompleteModel {
         text_input.cursor.style = Style::new().foreground(Color::from("63"));
         text_input.set_char_limit(50);
         text_input.set_width(20);
-        
+
         Self {
             text_input,
             help: help::Model::new(),
@@ -110,7 +113,10 @@ impl Model for AutocompleteModel {
         // Focus the input so it immediately receives typed characters
         let focus_cmd = model.text_input.focus();
         // Start HTTP request for repos and trigger an immediate first render
-        (model, Some(batch(vec![fetch_repos(), init_render_cmd(), focus_cmd])))
+        (
+            model,
+            Some(batch(vec![fetch_repos(), init_render_cmd(), focus_cmd])),
+        )
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
@@ -125,7 +131,7 @@ impl Model for AutocompleteModel {
             self.text_input.set_suggestions(suggestions);
             return None;
         }
-        
+
         if let Some(GotReposErrMsg(err)) = msg.downcast_ref::<GotReposErrMsg>().cloned() {
             // Keep running; just show no suggestions and append an error note in the view
             eprintln!("error fetching repos: {}", err);
@@ -159,10 +165,7 @@ impl Model for AutocompleteModel {
             return String::from("");
         }
 
-        let mut result = format!(
-            "Pick a Charm™ repo:\n\n  {}",
-            self.text_input.view()
-        );
+        let mut result = format!("Pick a Charm™ repo:\n\n  {}", self.text_input.view());
 
         // Show suggestions dropdown like the Go version. We highlight the
         // currently selected suggestion and cap the visible list to 8.
@@ -170,7 +173,7 @@ impl Model for AutocompleteModel {
         if !matched_suggestions.is_empty() {
             let max_show = 8.min(matched_suggestions.len());
             let current_index = self.text_input.current_suggestion_index();
-            
+
             for (i, suggestion) in matched_suggestions.iter().take(max_show).enumerate() {
                 if i == current_index {
                     // Highlight selected suggestion
@@ -180,9 +183,12 @@ impl Model for AutocompleteModel {
                     result.push_str(&format!("\n  {}", suggestion));
                 }
             }
-            
+
             if matched_suggestions.len() > max_show {
-                result.push_str(&format!("\n  ... and {} more", matched_suggestions.len() - max_show));
+                result.push_str(&format!(
+                    "\n  ... and {} more",
+                    matched_suggestions.len() - max_show
+                ));
             }
         }
 

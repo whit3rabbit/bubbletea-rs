@@ -3,8 +3,8 @@
 //! Port of Bubble Tea's `textinput` example using `bubbletea-widgets::textinput`.
 
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
-use bubbletea_widgets::{textinput};
 use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
+use bubbletea_widgets::textinput;
 
 /// Key bindings for the textinput example
 #[derive(Debug)]

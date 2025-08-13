@@ -15,8 +15,10 @@
 //! - Responsive layout that adapts to terminal width
 
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
-use bubbletea_widgets::key::{new_binding, with_keys_str, with_help, Binding, KeyMap};
-use bubbletea_widgets::timer::{new as new_timer, Model as TimerModel, TimeoutMsg, TickMsg, StartStopMsg};
+use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding, KeyMap};
+use bubbletea_widgets::timer::{
+    new as new_timer, Model as TimerModel, StartStopMsg, TickMsg, TimeoutMsg,
+};
 use lipgloss_extras::lipgloss::{Color, Style};
 use std::time::Duration;
 
@@ -26,9 +28,9 @@ struct InitRenderMsg;
 /// Timer preset types for different use cases
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum TimerType {
-    Quick,      // 5 seconds - for demos and quick tasks
-    Pomodoro,   // 25 minutes - work session
-    Break,      // 5 minutes - short break
+    Quick,    // 5 seconds - for demos and quick tasks
+    Pomodoro, // 25 minutes - work session
+    Break,    // 5 minutes - short break
 }
 
 impl TimerType {
@@ -62,12 +64,12 @@ pub struct TimerApp {
     // Timer state
     timers: Vec<(TimerType, TimerModel)>,
     active_timer: usize,
-    
-    // UI state  
+
+    // UI state
     help_expanded: bool,
     terminal_width: u16,
     quitting: bool,
-    
+
     // Key bindings
     key_bindings: TimerKeyBindings,
 }
@@ -89,10 +91,7 @@ impl TimerKeyBindings {
                 with_keys_str(&["space", "s"]),
                 with_help("space/s", "start/stop timer"),
             ]),
-            timer_reset: new_binding(vec![
-                with_keys_str(&["r"]),
-                with_help("r", "reset timer"),
-            ]),
+            timer_reset: new_binding(vec![with_keys_str(&["r"]), with_help("r", "reset timer")]),
             timer_next: new_binding(vec![
                 with_keys_str(&["right", "l", "n"]),
                 with_help("→/l/n", "next timer"),
@@ -101,10 +100,7 @@ impl TimerKeyBindings {
                 with_keys_str(&["left", "h", "p"]),
                 with_help("←/h/p", "previous timer"),
             ]),
-            help_toggle: new_binding(vec![
-                with_keys_str(&["?"]),
-                with_help("?", "toggle help"),
-            ]),
+            help_toggle: new_binding(vec![with_keys_str(&["?"]), with_help("?", "toggle help")]),
             quit: new_binding(vec![
                 with_keys_str(&["q", "esc", "ctrl+c"]),
                 with_help("q", "quit"),
@@ -128,10 +124,7 @@ impl KeyMap for TimerKeyBindings {
                 &self.timer_prev,
             ],
             // Application controls column
-            vec![
-                &self.help_toggle,
-                &self.quit,
-            ],
+            vec![&self.help_toggle, &self.quit],
         ]
     }
 }
@@ -141,7 +134,10 @@ impl TimerApp {
         // Create timer instances for each preset
         let timers = vec![
             (TimerType::Quick, new_timer(TimerType::Quick.duration())),
-            (TimerType::Pomodoro, new_timer(TimerType::Pomodoro.duration())),
+            (
+                TimerType::Pomodoro,
+                new_timer(TimerType::Pomodoro.duration()),
+            ),
             (TimerType::Break, new_timer(TimerType::Break.duration())),
         ];
 
@@ -185,14 +181,11 @@ impl TimerApp {
     fn render_timer_status(&self) -> String {
         let timer = self.current_timer();
         let timer_type = self.current_timer_type();
-        
+
         // Timer name and description
-        let name_style = Style::new()
-            .foreground(Color::from("#FF75B7"))
-            .bold(true);
-        let desc_style = Style::new()
-            .foreground(Color::from("#666666"));
-            
+        let name_style = Style::new().foreground(Color::from("#FF75B7")).bold(true);
+        let desc_style = Style::new().foreground(Color::from("#666666"));
+
         let timer_info = format!(
             "{}\n{}",
             name_style.render(timer_type.name()),
@@ -233,22 +226,22 @@ impl TimerApp {
         let timer_type = self.current_timer_type();
         let total = timer_type.duration();
         let remaining = timer.timeout;
-        
+
         if total.is_zero() {
             return String::new();
         }
-        
+
         let progress = 1.0 - (remaining.as_secs_f64() / total.as_secs_f64());
         let width = (self.terminal_width as usize).min(50).max(20);
         let filled = ((width as f64) * progress).round() as usize;
         let empty = width - filled;
-        
+
         let filled_char = "█";
         let empty_char = "░";
-        
+
         let filled_style = Style::new().foreground(Color::from("#00AAFF"));
         let empty_style = Style::new().foreground(Color::from("#333333"));
-        
+
         format!(
             "{}{}",
             filled_style.render(&filled_char.repeat(filled)),
@@ -258,7 +251,7 @@ impl TimerApp {
 
     fn render_timer_selector(&self) -> String {
         let mut parts = Vec::new();
-        
+
         for (i, (timer_type, _)) in self.timers.iter().enumerate() {
             let name = timer_type.name();
             let styled_name = if i == self.active_timer {
@@ -273,7 +266,7 @@ impl TimerApp {
             };
             parts.push(styled_name);
         }
-        
+
         format!("Timers: {}", parts.join(" "))
     }
 
@@ -306,7 +299,7 @@ impl TimerApp {
                 format!("{} {}", help.key, help.desc)
             })
             .collect();
-            
+
         let right_items: Vec<String> = col2
             .iter()
             .map(|b| {
@@ -317,18 +310,26 @@ impl TimerApp {
 
         let max_len = col1.len().max(col2.len());
         let mut lines = Vec::new();
-        
+
         for i in 0..max_len {
-            let left = if i < left_items.len() { &left_items[i] } else { "" };
-            let right = if i < right_items.len() { &right_items[i] } else { "" };
-            
+            let left = if i < left_items.len() {
+                &left_items[i]
+            } else {
+                ""
+            };
+            let right = if i < right_items.len() {
+                &right_items[i]
+            } else {
+                ""
+            };
+
             if right.is_empty() {
                 lines.push(left.to_string());
             } else {
                 lines.push(format!("{:<30} {}", left, right));
             }
         }
-        
+
         lines.join("\n")
     }
 }
@@ -336,7 +337,7 @@ impl TimerApp {
 impl Model for TimerApp {
     fn init() -> (Self, Option<Cmd>) {
         let mut app = Self::new();
-        
+
         // Set initial terminal width
         if let Ok((w, _h)) = crossterm::terminal::size() {
             app.terminal_width = w;
@@ -344,7 +345,7 @@ impl Model for TimerApp {
 
         // Initialize the first timer like the basic timer example
         let init_cmd = app.current_timer().init();
-        
+
         (app, Some(init_cmd))
     }
 
@@ -360,16 +361,16 @@ impl Model for TimerApp {
             }
         }
 
-        // Handle timer tick messages  
+        // Handle timer tick messages
         if let Some(_tick_msg) = msg.downcast_ref::<TickMsg>() {
             return self.current_timer_mut().update(msg);
         }
-        
+
         // Handle timer start/stop messages
         if let Some(_start_stop_msg) = msg.downcast_ref::<StartStopMsg>() {
             return self.current_timer_mut().update(msg);
         }
-        
+
         // Forward timeout messages to active timer
         if msg.downcast_ref::<TimeoutMsg>().is_some() {
             return self.current_timer_mut().update(msg);
@@ -414,7 +415,7 @@ impl Model for TimerApp {
 
         let timer_status = self.render_timer_status();
         let help_view = self.render_help();
-        
+
         // Create a visually separated layout
         let separator = Style::new()
             .foreground(Color::from("#333333"))

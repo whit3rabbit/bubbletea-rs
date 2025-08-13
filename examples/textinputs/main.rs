@@ -27,7 +27,7 @@ impl ModelTextInputs {
             // cursor.text_style is for the character underneath when cursor is hidden
             ti.cursor.style = Style::new(); // Default cursor block style
             ti.cursor.text_style = Style::new(); // Default text style when cursor hidden
-            // Make sure cursor mode is set to blink
+                                                 // Make sure cursor mode is set to blink
             let _ = ti.cursor.set_mode(cursor::Mode::Blink);
             ti.set_char_limit(32);
             // Explicitly set text_style to default to avoid conflicts
@@ -58,7 +58,6 @@ impl ModelTextInputs {
             keymap: AppKeyMap::default(),
         }
     }
-
 }
 
 struct AppKeyMap {
@@ -113,7 +112,8 @@ impl Model for ModelTextInputs {
 
             // Navigation and submit
             let is_back = self.keymap.prev.matches(key_msg);
-            let is_forward = self.keymap.next.matches(key_msg) || self.keymap.enter.matches(key_msg);
+            let is_forward =
+                self.keymap.next.matches(key_msg) || self.keymap.enter.matches(key_msg);
 
             if is_back || is_forward {
                 // Enter while submit focused quits
@@ -174,7 +174,11 @@ impl Model for ModelTextInputs {
                         }
                     }
                 }
-                return if cmds.is_empty() { None } else { Some(batch(cmds)) };
+                return if cmds.is_empty() {
+                    None
+                } else {
+                    Some(batch(cmds))
+                };
             }
         }
 
@@ -204,7 +208,11 @@ impl Model for ModelTextInputs {
         // Submit button
         let focused_button = focused_style.render("[ Submit ]");
         let blurred_button = format!("[ {} ]", blurred_style.render("Submit"));
-        let button = if self.submit_focused { &focused_button } else { &blurred_button };
+        let button = if self.submit_focused {
+            &focused_button
+        } else {
+            &blurred_button
+        };
         out.push_str(&format!("\n\n{}\n\n", button));
 
         // Help

@@ -12,8 +12,8 @@
 
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
 use crossterm::event::KeyCode;
-use lipgloss_extras::lipgloss::{Color, Style};
 use crossterm::terminal;
+use lipgloss_extras::lipgloss::{Color, Style};
 use std::env;
 use unicode_width::UnicodeWidthStr;
 
@@ -339,7 +339,9 @@ impl Model for HelpModel {
         let status = if let Some(ref last_key) = self.last_key {
             format!(
                 "You chose: {}",
-                Style::new().foreground(Color::from("#FF75B7")).render(last_key)
+                Style::new()
+                    .foreground(Color::from("#FF75B7"))
+                    .render(last_key)
             )
         } else {
             "Waiting for input...".to_string()

@@ -15,8 +15,8 @@ use bubbletea_rs::{batch, quit, Cmd, KeyMsg, Model, Msg, Program};
 use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
 use bubbletea_widgets::{spinner, timer};
 
-use lipgloss_extras::lipgloss::{border, Color, Style};
 use lipgloss_extras::lipgloss::position::CENTER;
+use lipgloss_extras::lipgloss::{border, Color, Style};
 use std::time::Duration;
 
 /// Key bindings for the composable views example
@@ -31,10 +31,7 @@ pub struct KeyBindings {
 impl Default for KeyBindings {
     fn default() -> Self {
         Self {
-            quit: new_binding(vec![
-                with_keys_str(&["q"]),
-                with_help("q", "quit"),
-            ]),
+            quit: new_binding(vec![with_keys_str(&["q"]), with_help("q", "quit")]),
             quit_alt: new_binding(vec![
                 with_keys_str(&["ctrl+c"]),
                 with_help("ctrl+c", "quit"),
@@ -43,10 +40,7 @@ impl Default for KeyBindings {
                 with_keys_str(&["tab"]),
                 with_help("tab", "focus next"),
             ]),
-            new: new_binding(vec![
-                with_keys_str(&["n"]),
-                with_help("n", "new"),
-            ]),
+            new: new_binding(vec![with_keys_str(&["n"]), with_help("n", "new")]),
         }
     }
 }
@@ -62,7 +56,7 @@ enum SessionState {
 #[derive(Debug, Clone, Copy)]
 enum SpinnerStyle {
     Line,
-    Dot, 
+    Dot,
     MiniDot,
     Jump,
     Pulse,
@@ -77,7 +71,7 @@ impl SpinnerStyle {
         &[
             SpinnerStyle::Line,
             SpinnerStyle::Dot,
-            SpinnerStyle::MiniDot, 
+            SpinnerStyle::MiniDot,
             SpinnerStyle::Jump,
             SpinnerStyle::Pulse,
             SpinnerStyle::Points,
@@ -117,10 +111,10 @@ impl MainModel {
     fn new() -> Self {
         let spinner_styles = SpinnerStyle::all().to_vec();
         let current_spinner_index = 0;
-        
+
         // Create timer widget (60 second countdown)
         let timer_model = timer::new(Duration::from_secs(60));
-        
+
         // Create spinner widget with faster animation than timer
         // Using DOT spinner with custom faster interval (80ms vs 1000ms timer)
         let spinner_model = spinner::new(&[
@@ -148,7 +142,7 @@ impl MainModel {
     fn next_spinner(&mut self) {
         self.current_spinner_index = (self.current_spinner_index + 1) % self.spinner_styles.len();
         let new_spinner = self.spinner_styles[self.current_spinner_index].to_widget_spinner();
-        
+
         // Create new spinner with updated style
         self.spinner_model = spinner::new(&[
             spinner::with_spinner(new_spinner),
@@ -181,16 +175,16 @@ impl MainModel {
 impl Model for MainModel {
     fn init() -> (Self, Option<Cmd>) {
         let model = MainModel::new();
-        
+
         // Start timer only - spinners are passive widgets
         let timer_cmd = model.timer_model.start();
-        
+
         (model, Some(timer_cmd))
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         let mut cmds: Vec<Cmd> = Vec::new();
-        
+
         // Handle keyboard input
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
             if self.keys.quit.matches(key_msg) {

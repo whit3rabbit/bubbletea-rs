@@ -37,7 +37,10 @@ fn test_typing_updates_view() {
 #[test]
 fn test_enter_key_quits() {
     let (mut model, _) = TextInputModel::init();
-    let key_msg = Box::new(KeyMsg { key: KeyCode::Enter, modifiers: KeyModifiers::NONE }) as Msg;
+    let key_msg = Box::new(KeyMsg {
+        key: KeyCode::Enter,
+        modifiers: KeyModifiers::NONE,
+    }) as Msg;
     let cmd = model.update(key_msg);
     assert!(cmd.is_some());
 }
@@ -45,7 +48,10 @@ fn test_enter_key_quits() {
 #[test]
 fn test_esc_key_quits() {
     let (mut model, _) = TextInputModel::init();
-    let key_msg = Box::new(KeyMsg { key: KeyCode::Esc, modifiers: KeyModifiers::NONE }) as Msg;
+    let key_msg = Box::new(KeyMsg {
+        key: KeyCode::Esc,
+        modifiers: KeyModifiers::NONE,
+    }) as Msg;
     let cmd = model.update(key_msg);
     assert!(cmd.is_some());
 }
@@ -53,7 +59,10 @@ fn test_esc_key_quits() {
 #[test]
 fn test_ctrl_c_quits() {
     let (mut model, _) = TextInputModel::init();
-    let key_msg = Box::new(KeyMsg { key: KeyCode::Char('c'), modifiers: KeyModifiers::CONTROL }) as Msg;
+    let key_msg = Box::new(KeyMsg {
+        key: KeyCode::Char('c'),
+        modifiers: KeyModifiers::CONTROL,
+    }) as Msg;
     let cmd = model.update(key_msg);
     assert!(cmd.is_some());
 }

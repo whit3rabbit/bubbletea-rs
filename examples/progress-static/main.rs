@@ -17,7 +17,13 @@
 
 use bubbletea_rs::gradient::gradient_filled_segment;
 use bubbletea_rs::{quit, tick, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
+use lipgloss_extras::lipgloss::{Color, Style};
 use std::time::Duration;
+
+/// Help text style matching Go version
+fn help_style() -> Style {
+    Style::new().foreground(Color::from("#626262"))
+}
 
 /// Message for progress tick updates
 #[derive(Debug)]
@@ -123,10 +129,11 @@ impl Model for ProgressStaticModel {
         const PADDING: &str = "  "; // 2 spaces padding
 
         format!(
-            "\n{}{}\n\n{}Press any key to quit",
+            "\n{}{}\n\n{}{}",
             PADDING,
             self.progress.view_as(self.percent),
-            PADDING
+            PADDING,
+            help_style().render("Press any key to quit")
         )
     }
 }

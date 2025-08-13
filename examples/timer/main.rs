@@ -14,9 +14,13 @@
 //! - Automatic quit when timer reaches zero
 
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model as BubbleTeaModel, Msg, Program};
-use bubbletea_widgets::key::{new_binding, with_keys_str, with_help, matches_binding, Binding, KeyMap};
-use bubbletea_widgets::timer::{new_with_interval, Model as TimerModel, TimeoutMsg, TickMsg, StartStopMsg};
-use bubbletea_widgets::help::{Model as HelpModel, KeyMap as HelpKeyMap};
+use bubbletea_widgets::help::{KeyMap as HelpKeyMap, Model as HelpModel};
+use bubbletea_widgets::key::{
+    matches_binding, new_binding, with_help, with_keys_str, Binding, KeyMap,
+};
+use bubbletea_widgets::timer::{
+    new_with_interval, Model as TimerModel, StartStopMsg, TickMsg, TimeoutMsg,
+};
 use std::time::Duration;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
@@ -69,7 +73,7 @@ pub struct Model {
 #[derive(Debug, Clone)]
 pub struct Keymap {
     pub start: Binding,
-    pub stop: Binding,  
+    pub stop: Binding,
     pub reset: Binding,
     pub quit: Binding,
 }
@@ -77,18 +81,9 @@ pub struct Keymap {
 impl Keymap {
     pub fn new() -> Self {
         Self {
-            start: new_binding(vec![
-                with_keys_str(&["s"]),
-                with_help("s", "start"),
-            ]),
-            stop: new_binding(vec![
-                with_keys_str(&["s"]),
-                with_help("s", "stop"),
-            ]),
-            reset: new_binding(vec![
-                with_keys_str(&["r"]),
-                with_help("r", "reset"),
-            ]),
+            start: new_binding(vec![with_keys_str(&["s"]), with_help("s", "start")]),
+            stop: new_binding(vec![with_keys_str(&["s"]), with_help("s", "stop")]),
+            reset: new_binding(vec![with_keys_str(&["r"]), with_help("r", "reset")]),
             quit: new_binding(vec![
                 with_keys_str(&["q", "ctrl+c"]),
                 with_help("q", "quit"),
@@ -112,7 +107,7 @@ impl KeyMap for Keymap {
         bindings.push(&self.quit);
         bindings
     }
-    
+
     fn full_help(&self) -> Vec<Vec<&Binding>> {
         // Not used in this example - short help only
         vec![self.short_help()]
@@ -122,16 +117,16 @@ impl KeyMap for Keymap {
 impl Model {
     pub fn new() -> Self {
         let mut keymap = Keymap::new();
-        
+
         // Match Go's initial state: start is disabled since timer starts running
         keymap.start.set_enabled(false);
-        
+
         // Create help model
         let mut help = HelpModel::new();
         help.show_all = false; // Use short help like Go version
-        
+
         Self {
-            // Match Go's NewWithInterval(timeout, time.Millisecond) 
+            // Match Go's NewWithInterval(timeout, time.Millisecond)
             timer: new_with_interval(TIMEOUT, Duration::from_millis(1)),
             keymap,
             help,
@@ -145,7 +140,7 @@ impl HelpKeyMap for Model {
     fn short_help(&self) -> Vec<&Binding> {
         self.keymap.short_help()
     }
-    
+
     fn full_help(&self) -> Vec<Vec<&Binding>> {
         self.keymap.full_help()
     }
@@ -161,13 +156,13 @@ impl BubbleTeaModel for Model {
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         // Handle timer messages (matching Go's switch cases)
-        
+
         // timer.TickMsg case
         if let Some(_tick_msg) = msg.downcast_ref::<TickMsg>() {
             return self.timer.update(msg);
         }
-        
-        // timer.StartStopMsg case  
+
+        // timer.StartStopMsg case
         if let Some(_start_stop_msg) = msg.downcast_ref::<StartStopMsg>() {
             let cmd = self.timer.update(msg);
             // Match Go's key enabling logic
@@ -175,13 +170,13 @@ impl BubbleTeaModel for Model {
             self.keymap.start.set_enabled(!self.timer.running());
             return cmd;
         }
-        
+
         // timer.TimeoutMsg case
         if let Some(_timeout_msg) = msg.downcast_ref::<TimeoutMsg>() {
             self.quitting = true;
             return Some(quit());
         }
-        
+
         // tea.KeyMsg case
         if let Some(key) = msg.downcast_ref::<KeyMsg>() {
             if matches_binding(key, &self.keymap.quit) {
@@ -190,19 +185,21 @@ impl BubbleTeaModel for Model {
             } else if matches_binding(key, &self.keymap.reset) {
                 // Match Go's m.timer.Timeout = timeout
                 self.timer.timeout = TIMEOUT;
-            } else if matches_binding(key, &self.keymap.start) || matches_binding(key, &self.keymap.stop) {
+            } else if matches_binding(key, &self.keymap.start)
+                || matches_binding(key, &self.keymap.stop)
+            {
                 // Match Go's m.timer.Toggle()
                 return Some(self.timer.toggle());
             }
         }
-        
+
         None
     }
 
     fn view(&self) -> String {
         // Match Go's View() method exactly
-        
-        // For a more detailed timer view you could read m.timer.Timeout to get  
+
+        // For a more detailed timer view you could read m.timer.Timeout to get
         // the remaining time as a time.Duration and skip calling m.timer.View()
         // entirely.
         let mut s = if self.timer.timedout() {
@@ -211,23 +208,21 @@ impl BubbleTeaModel for Model {
             // Use custom formatting to match Go's 3 decimal places for seconds
             format_duration_like_go(self.timer.timeout)
         };
-        
+
         s.push('\n');
-        
+
         if !self.quitting {
             s = format!("Exiting in {}", s);
             s.push_str(&self.help.view(self));
         }
-        
+
         s
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let program = Program::<Model>::builder()
-        .signal_handler(true)
-        .build()?;
+    let program = Program::<Model>::builder().signal_handler(true).build()?;
 
     program.run().await?;
     Ok(())

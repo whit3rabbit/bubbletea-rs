@@ -1,5 +1,5 @@
-use bubbletea_widgets::viewport;
 use bubbletea_rs::Model as BubbleTeaModel;
+use bubbletea_widgets::viewport;
 
 #[test]
 fn test_viewport_basic_paging() {
@@ -52,5 +52,3 @@ fn test_viewport_horizontal_clipping() {
     assert!(first_after.len() <= 8);
     assert_ne!(first_before, first_after);
 }
-
-

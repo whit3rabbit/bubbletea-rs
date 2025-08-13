@@ -57,14 +57,8 @@ impl Default for KeyBindings {
                 with_keys_str(&["q", "esc"]),
                 with_help("q/esc", "quit"),
             ]),
-            up: new_binding(vec![
-                with_keys_str(&["up"]),
-                with_help("↑", "move up"),
-            ]),
-            down: new_binding(vec![
-                with_keys_str(&["down"]),
-                with_help("↓", "move down"),
-            ]),
+            up: new_binding(vec![with_keys_str(&["up"]), with_help("↑", "move up")]),
+            down: new_binding(vec![with_keys_str(&["down"]), with_help("↓", "move down")]),
             select: new_binding(vec![
                 with_keys_str(&["enter"]),
                 with_help("enter", "select"),

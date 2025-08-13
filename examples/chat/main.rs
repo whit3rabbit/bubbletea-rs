@@ -1,6 +1,6 @@
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
-use bubbletea_widgets::{textinput, viewport};
 use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
+use bubbletea_widgets::{textinput, viewport};
 use lipgloss_extras::lipgloss::{Color, Style};
 
 // Port of Bubble Tea's chat example using bubbletea-widgets `viewport` and `textarea`.
@@ -19,10 +19,7 @@ pub struct KeyBindings {
 impl Default for KeyBindings {
     fn default() -> Self {
         Self {
-            quit: new_binding(vec![
-                with_keys_str(&["esc"]),
-                with_help("esc", "quit"),
-            ]),
+            quit: new_binding(vec![with_keys_str(&["esc"]), with_help("esc", "quit")]),
             quit_alt: new_binding(vec![
                 with_keys_str(&["ctrl+c"]),
                 with_help("ctrl+c", "quit"),
@@ -100,7 +97,8 @@ impl Model for ChatModel {
             self.term_height = ws.height as usize;
 
             // Resize the textinput to full width minus prompt
-            self.textinput.set_width((self.term_width.saturating_sub(2)) as i32);
+            self.textinput
+                .set_width((self.term_width.saturating_sub(2)) as i32);
 
             // Recreate viewport with new size: height = terminal - input height - gap
             let gap_h = GAP.matches('\n').count();
@@ -128,7 +126,7 @@ impl Model for ChatModel {
                 println!("{}", self.textinput.value());
                 return Some(quit());
             }
-            
+
             if self.keys.send.matches(k) {
                 let value = self.textinput.value();
                 if !value.trim().is_empty() {

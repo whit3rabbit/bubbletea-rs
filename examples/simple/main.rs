@@ -26,10 +26,7 @@ pub struct KeyBindings {
 impl Default for KeyBindings {
     fn default() -> Self {
         Self {
-            quit: new_binding(vec![
-                with_keys_str(&["q"]),
-                with_help("q", "quit"),
-            ]),
+            quit: new_binding(vec![with_keys_str(&["q"]), with_help("q", "quit")]),
             suspend: new_binding(vec![
                 with_keys_str(&["ctrl+z"]),
                 with_help("ctrl+z", "suspend"),

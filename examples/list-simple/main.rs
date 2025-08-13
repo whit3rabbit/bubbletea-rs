@@ -1,6 +1,6 @@
 use bubbletea_rs::{Cmd, KeyMsg, Model as BubbleTeaModel, Msg, WindowSizeMsg};
+use bubbletea_widgets::key::{matches_binding, new_binding, with_help, with_keys_str, Binding};
 use bubbletea_widgets::list::{Item, ItemDelegate, Model as List};
-use bubbletea_widgets::key::{new_binding, with_keys_str, with_help, matches_binding, Binding};
 use bubbletea_widgets::paginator::Type as PaginatorType;
 use lipgloss_extras::lipgloss::{Color, Style};
 use std::fmt::Display;
@@ -39,9 +39,7 @@ impl Default for FoodDelegate {
     fn default() -> Self {
         Self {
             item_style: Style::new().padding_left(4),
-            selected_item_style: Style::new()
-                .padding_left(2)
-                .foreground(Color::from("170")),
+            selected_item_style: Style::new().padding_left(2).foreground(Color::from("170")),
         }
     }
 }
@@ -80,10 +78,7 @@ struct AppKeyMap {
 impl Default for AppKeyMap {
     fn default() -> Self {
         Self {
-            quit: new_binding(vec![
-                with_keys_str(&["q"]),
-                with_help("q", "quit"),
-            ]),
+            quit: new_binding(vec![with_keys_str(&["q"]), with_help("q", "quit")]),
             force_quit: new_binding(vec![
                 with_keys_str(&["ctrl+c"]),
                 with_help("ctrl+c", "force quit"),
@@ -155,7 +150,7 @@ impl BubbleTeaModel for Model {
             // Just trigger a render, no state change needed
             return None;
         }
-        
+
         // Handle window size changes
         if let Some(_size_msg) = msg.downcast_ref::<WindowSizeMsg>() {
             // List widget handles resizing internally
@@ -168,12 +163,10 @@ impl BubbleTeaModel for Model {
             if matches_binding(key_msg, &self.keymap.quit) {
                 self.quitting = true;
                 return Some(bubbletea_rs::quit());
-            }
-            else if matches_binding(key_msg, &self.keymap.force_quit) {
+            } else if matches_binding(key_msg, &self.keymap.force_quit) {
                 self.quitting = true;
                 return Some(bubbletea_rs::quit());
-            }
-            else if matches_binding(key_msg, &self.keymap.select) {
+            } else if matches_binding(key_msg, &self.keymap.select) {
                 if let Some(item) = self.list.selected_item() {
                     self.choice = Some(item.0.clone());
                 }

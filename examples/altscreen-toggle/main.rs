@@ -86,12 +86,12 @@ impl Model for AltScreenModel {
                 self.quitting = true;
                 return Some(quit());
             }
-            
+
             if self.keys.suspend.matches(key) {
                 self.suspending = true;
                 return Some(suspend());
             }
-            
+
             if self.keys.toggle.matches(key) {
                 // Toggle alt screen
                 let cmd = if self.altscreen {
@@ -124,10 +124,9 @@ impl Model for AltScreenModel {
         let keyword_style = Style::new()
             .foreground(Color::from("204"))
             .background(Color::from("235"));
-        
-        let help_style = Style::new()
-            .foreground(Color::from("241"));
-        
+
+        let help_style = Style::new().foreground(Color::from("241"));
+
         let mode = if self.altscreen {
             " altscreen mode "
         } else {

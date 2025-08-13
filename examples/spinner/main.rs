@@ -51,7 +51,7 @@ impl SpinnerModel {
     fn current_spinner_frame(&self) -> String {
         let frames = Self::frames();
         let frame = frames[self.current_frame % frames.len()];
-        
+
         // Apply pink styling (#205) to match Go version exactly
         let style = Style::new().foreground(Color::from("205"));
         style.render(frame)
@@ -72,7 +72,7 @@ impl SpinnerModel {
 impl Model for SpinnerModel {
     fn init() -> (Self, Option<Cmd>) {
         let model = SpinnerModel::new();
-        
+
         // Start the spinner animation
         let cmd = tick(Self::interval(), |_| Box::new(SpinnerTickMsg) as Msg);
         (model, Some(cmd))
@@ -122,11 +122,11 @@ impl Model for SpinnerModel {
             "\n\n   {} Loading forever...press q to quit\n\n",
             self.current_spinner_frame()
         );
-        
+
         if self.quitting {
             return str + "\n";
         }
-        
+
         str
     }
 }

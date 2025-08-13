@@ -1,27 +1,44 @@
 //! Progress Download Example
 //!
 //! Demonstrates:
-//! - Animated progress bar with download simulation
-//! - Progress updates from background async tasks
+//! - Real HTTP file downloads with animated progress bars
+//! - Background download tasks with progress reporting
 //! - Error handling during download process
 //! - Real-time percentage display with smooth animations
 //! - Window resize handling for progress bar sizing
 //! - Completion detection with auto-quit after brief pause
-//! - External message sending from background tasks
+//! - Command-line argument parsing for download URLs
 //!
-//! This example simulates downloading a file with realistic download
-//! patterns including variable speed, network delays, and potential
-//! errors. It demonstrates how to integrate progress tracking with
-//! background async operations in Bubble Tea applications.
+//! This example downloads actual files from HTTP URLs and displays
+//! real-time progress with an animated progress bar. It demonstrates
+//! how to integrate progress tracking with background async operations
+//! in Bubble Tea applications.
 //!
-//! This is a faithful port of the Go Bubble Tea progress-download example,
-//! but uses simulated downloads instead of real HTTP requests for
-//! demonstration purposes and better testability.
+//! This is a faithful port of the Go Bubble Tea progress-download example
+//! with identical behavior, UI, and command-line interface.
+//!
+//! Usage: cargo run -- --url https://example.com/file.zip
 
 use bubbletea_rs::gradient::gradient_filled_segment;
-use bubbletea_rs::{batch, quit, tick, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
-use rand::Rng;
+use bubbletea_rs::{batch, quit, sequence, tick, Cmd, KeyMsg, Model, Msg, Program, WindowSizeMsg};
+use clap::Parser;
+use futures_util::StreamExt;
+use lipgloss_extras::lipgloss::{Color, Style};
+use std::path::Path;
 use std::time::Duration;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
+use tokio::sync::mpsc;
+
+/// Command line arguments
+#[derive(Parser, Debug)]
+#[command(name = "progress-download")]
+#[command(about = "Download a file with an animated progress bar")]
+struct Args {
+    /// URL of the file to download
+    #[arg(long)]
+    url: String,
+}
 
 /// Message containing progress update (0.0 to 1.0)
 #[derive(Debug, Clone)]
@@ -41,78 +58,62 @@ pub struct ProgressErrMsg {
 #[derive(Debug)]
 pub struct FinalPauseMsg;
 
-/// Message for download tick updates
+/// Message for processing progress channel
 #[derive(Debug)]
-pub struct DownloadTickMsg;
+pub struct ProcessChannelMsg;
 
-/// Simulated download manager
-#[derive(Debug)]
-pub struct DownloadSimulator {
-    pub file_name: String,
-    pub total_size: u64,
-    pub downloaded: u64,
-    pub is_complete: bool,
-    pub has_error: Option<String>,
-    pub download_speed: u64, // bytes per tick
-    pub error_chance: u32,   // 0-100, chance of error per tick
+/// Progress writer that handles the actual download and progress reporting
+pub struct ProgressWriter {
+    total: u64,
+    downloaded: u64,
+    file: File,
+    progress_sender: mpsc::UnboundedSender<Msg>,
 }
 
-impl DownloadSimulator {
-    pub fn new(file_name: String, size_mb: u64) -> Self {
+impl ProgressWriter {
+    pub fn new(total: u64, file: File, progress_sender: mpsc::UnboundedSender<Msg>) -> Self {
         Self {
-            file_name,
-            total_size: size_mb * 1024 * 1024, // Convert MB to bytes
+            total,
             downloaded: 0,
-            is_complete: false,
-            has_error: None,
-            download_speed: 50 * 1024, // 50KB per tick (roughly 500KB/s at 100ms ticks)
-            error_chance: 1,           // 1% chance of error per tick
+            file,
+            progress_sender,
         }
     }
 
-    /// Get current progress ratio (0.0 to 1.0)
-    pub fn progress(&self) -> f64 {
-        if self.total_size == 0 {
-            0.0
-        } else {
-            (self.downloaded as f64 / self.total_size as f64).min(1.0)
-        }
-    }
+    /// Start the download process
+    pub async fn start(
+        &mut self,
+        response: reqwest::Response,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut stream = response.bytes_stream();
 
-    /// Simulate download progress for one tick
-    pub fn tick(&mut self) -> Result<bool, String> {
-        if self.is_complete || self.has_error.is_some() {
-            return Ok(self.is_complete);
-        }
+        while let Some(chunk_result) = stream.next().await {
+            match chunk_result {
+                Ok(chunk) => {
+                    self.file.write_all(&chunk).await?;
+                    self.downloaded += chunk.len() as u64;
 
-        let mut rng = rand::thread_rng();
-
-        // Simulate occasional network errors
-        if rng.gen_range(0..100) < self.error_chance {
-            let error = "Network timeout - connection lost".to_string();
-            self.has_error = Some(error.clone());
-            return Err(error);
-        }
-
-        // Simulate variable download speed (50% to 150% of base speed)
-        let speed_variation = rng.gen_range(0.5..1.5);
-        let chunk_size = (self.download_speed as f64 * speed_variation) as u64;
-
-        let remaining = self.total_size - self.downloaded;
-        let actual_chunk = chunk_size.min(remaining);
-
-        self.downloaded += actual_chunk;
-
-        if self.downloaded >= self.total_size {
-            self.downloaded = self.total_size;
-            self.is_complete = true;
+                    if self.total > 0 {
+                        let progress = self.downloaded as f64 / self.total as f64;
+                        let _ = self
+                            .progress_sender
+                            .send(Box::new(ProgressMsg(progress)) as Msg);
+                    }
+                }
+                Err(e) => {
+                    let _ = self.progress_sender.send(Box::new(ProgressErrMsg {
+                        error: format!("Download error: {}", e),
+                    }) as Msg);
+                    return Err(Box::new(e));
+                }
+            }
         }
 
-        Ok(self.is_complete)
+        Ok(())
     }
 }
 
-/// Animated progress bar with gradient
+/// Animated progress bar with gradient (matching progress-animated example)
 #[derive(Debug)]
 pub struct AnimatedProgressBar {
     pub width: usize,
@@ -131,7 +132,7 @@ impl AnimatedProgressBar {
             target_percent: 0.0,
             filled_char: '█',
             empty_char: '░',
-            animation_speed: 0.15, // Slightly faster for download feedback
+            animation_speed: 0.15,
         }
     }
 
@@ -190,20 +191,27 @@ impl AnimatedProgressBar {
     }
 }
 
+/// Static channel for communicating with the model
+static PROGRESS_CHANNEL: std::sync::OnceLock<mpsc::UnboundedSender<Msg>> =
+    std::sync::OnceLock::new();
+
 /// The application state
 #[derive(Debug)]
 pub struct ProgressDownloadModel {
-    pub downloader: DownloadSimulator,
     pub progress: AnimatedProgressBar,
     pub error: Option<String>,
+    pub progress_receiver: mpsc::UnboundedReceiver<Msg>,
 }
 
 impl ProgressDownloadModel {
-    pub fn new(file_name: String, size_mb: u64) -> Self {
+    pub fn new() -> Self {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let _ = PROGRESS_CHANNEL.set(sender);
+
         Self {
-            downloader: DownloadSimulator::new(file_name, size_mb),
             progress: AnimatedProgressBar::new(),
             error: None,
+            progress_receiver: receiver,
         }
     }
 
@@ -216,7 +224,7 @@ impl ProgressDownloadModel {
         self.progress.width = available_width.min(MAX_WIDTH);
     }
 
-    /// Create final pause command before quitting
+    /// Create final pause command before quitting (matching Go's 750ms)
     fn final_pause() -> Cmd {
         tick(Duration::from_millis(750), |_| {
             Box::new(FinalPauseMsg) as Msg
@@ -226,61 +234,51 @@ impl ProgressDownloadModel {
 
 impl Model for ProgressDownloadModel {
     fn init() -> (Self, Option<Cmd>) {
-        // For demo purposes, simulate downloading a 10MB file
-        let model = ProgressDownloadModel::new("example-file.zip".to_string(), 10);
-
-        // Start the download simulation with timer ticks
-        let tick_cmd = tick(Duration::from_millis(100), |_| {
-            Box::new(DownloadTickMsg) as Msg
+        let model = Self::new();
+        // Start checking for progress messages
+        let channel_cmd = tick(Duration::from_millis(10), |_| {
+            Box::new(ProcessChannelMsg) as Msg
         });
-        (model, Some(tick_cmd))
+        (model, Some(channel_cmd))
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
-        // Handle download tick updates
-        if msg.downcast_ref::<DownloadTickMsg>().is_some() {
-            match self.downloader.tick() {
-                Ok(is_complete) => {
-                    let mut cmds = Vec::new();
+        // Handle channel message processing
+        if msg.downcast_ref::<ProcessChannelMsg>().is_some() {
+            // Try to receive a message from the channel
+            match self.progress_receiver.try_recv() {
+                Ok(progress_msg) => {
+                    // Process the received message and continue polling
+                    let next_poll = tick(Duration::from_millis(10), |_| {
+                        Box::new(ProcessChannelMsg) as Msg
+                    });
 
-                    // Update progress bar with animation
-                    let progress = self.downloader.progress();
-                    if let Some(progress_cmd) = self.progress.set_percent(progress) {
-                        cmds.push(progress_cmd);
-                    }
-
-                    if is_complete {
-                        // Add final pause and quit
-                        cmds.push(Self::final_pause());
-                        cmds.push(quit());
-                    } else {
-                        // Continue download simulation
-                        cmds.push(tick(Duration::from_millis(100), |_| {
-                            Box::new(DownloadTickMsg) as Msg
-                        }));
-                    }
-
-                    return if cmds.is_empty() {
-                        None
-                    } else {
-                        Some(batch(cmds))
-                    };
+                    // Forward the progress message to ourselves and continue polling
+                    return Some(batch(vec![
+                        Box::pin(async move { Some(progress_msg) }),
+                        next_poll,
+                    ]));
                 }
-                Err(error) => {
-                    self.error = Some(error);
-                    return Some(quit());
+                Err(mpsc::error::TryRecvError::Empty) => {
+                    // No message available, continue polling
+                    return Some(tick(Duration::from_millis(10), |_| {
+                        Box::new(ProcessChannelMsg) as Msg
+                    }));
+                }
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    // Channel closed, stop polling
+                    return None;
                 }
             }
         }
-
-        // Handle progress updates (for manual testing)
+        // Handle progress updates
         if let Some(progress_msg) = msg.downcast_ref::<ProgressMsg>() {
             let mut cmds = Vec::new();
 
-            // If download is complete, add final pause and quit
+            // If download is complete, add final pause and quit using sequence
             if progress_msg.0 >= 1.0 {
-                cmds.push(Self::final_pause());
-                cmds.push(quit());
+                // Use sequence to ensure final pause happens before quit (matching Go)
+                return Some(sequence(vec![Self::final_pause(), quit()]));
             }
 
             // Update progress bar with animation
@@ -308,7 +306,7 @@ impl Model for ProgressDownloadModel {
 
         // Handle final pause before quit
         if msg.downcast_ref::<FinalPauseMsg>().is_some() {
-            return None; // Just pause, quit will come from the batched command
+            return None; // Just pause, quit will come from the sequence command
         }
 
         // Handle window size changes
@@ -317,7 +315,7 @@ impl Model for ProgressDownloadModel {
             return None;
         }
 
-        // Handle keyboard input - ANY key quits
+        // Handle keyboard input - ANY key quits (matching Go behavior)
         if msg.downcast_ref::<KeyMsg>().is_some() {
             return Some(quit());
         }
@@ -326,28 +324,99 @@ impl Model for ProgressDownloadModel {
     }
 
     fn view(&self) -> String {
-        const PADDING: &str = "  "; // 2 spaces padding
+        const PADDING: &str = "  "; // 2 spaces padding (matching Go)
 
-        // Show error if there was one
+        // Show error if there was one (matching Go format)
         if let Some(error) = &self.error {
-            return format!("\n{}Error downloading: {}\n", PADDING, error);
+            return format!("Error downloading: {}\n", error);
         }
 
+        // Style help text with gray color (matching Go's lipgloss style #626262)
+        let help_style = Style::new().foreground(Color::from("#626262"));
+        let help_text = help_style.render("Press any key to quit");
+
+        // Match Go's view format exactly
         format!(
-            "\n{}Downloading {}...\n{}{}\n\n{}Press any key to quit",
-            PADDING,
-            self.downloader.file_name,
+            "\n{}{}\n\n{}{}",
             PADDING,
             self.progress.view(),
-            PADDING
+            PADDING,
+            help_text
         )
     }
 }
 
+async fn get_response(url: &str) -> Result<reqwest::Response, Box<dyn std::error::Error>> {
+    let response = reqwest::get(url).await?;
+
+    if !response.status().is_success() {
+        return Err(format!("receiving status of {} for url: {}", response.status(), url).into());
+    }
+
+    Ok(response)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create and run the program
+    let args = Args::parse();
+
+    if args.url.is_empty() {
+        eprintln!("URL is required");
+        std::process::exit(1);
+    }
+
+    // Get the response to check content length
+    let response = match get_response(&args.url).await {
+        Ok(resp) => resp,
+        Err(e) => {
+            eprintln!("could not get response: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Don't add TUI if the header doesn't include content size
+    // it's impossible to see progress without total (matching Go behavior)
+    let content_length = match response.content_length() {
+        Some(len) if len > 0 => len,
+        _ => {
+            eprintln!("can't parse content length, aborting download");
+            std::process::exit(1);
+        }
+    };
+
+    // Extract filename from URL
+    let filename = Path::new(&args.url)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("downloaded_file");
+
+    // Create the output file
+    let file = match File::create(filename).await {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("could not create file: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Start the program first to initialize the channel
     let program = Program::<ProgressDownloadModel>::builder().build()?;
+
+    // Get the progress sender from the static channel
+    let progress_sender = PROGRESS_CHANNEL
+        .get()
+        .expect("Progress channel should be initialized")
+        .clone();
+
+    // Create progress writer and start download in background
+    let mut progress_writer = ProgressWriter::new(content_length, file, progress_sender);
+
+    // Spawn the download task
+    tokio::spawn(async move {
+        if let Err(e) = progress_writer.start(response).await {
+            eprintln!("Download failed: {}", e);
+        }
+    });
 
     // Run the program
     program.run().await?;
