@@ -33,6 +33,7 @@ members = [
     "examples/debounce",
     "examples/exec",
     "examples/file-picker",
+    "examples/focus-blur",
 ]
 
 [patch.crates-io]

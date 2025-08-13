@@ -1,6 +1,7 @@
 //! File Picker Example (Rust, using bubbletea-widgets)
 //!
 //! Port of Bubble Tea's `file-picker` example using `bubbletea-widgets::filepicker`.
+// TODO: Fix tree view for file-pcker
 
 use bubbletea_rs::{quit, tick, Cmd, KeyMsg, Model, Msg, Program};
 use bubbletea_widgets::filepicker;
