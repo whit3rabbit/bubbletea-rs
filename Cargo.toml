@@ -31,6 +31,7 @@ members = [
     "examples/timer-advanced",
     "examples/stopwatch",
     "examples/debounce",
+    "examples/exec",
 ]
 
 [patch.crates-io]
