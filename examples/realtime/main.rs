@@ -64,7 +64,7 @@ impl RealtimeModel {
         // Use DOT spinner frames
         let frames = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let frame = frames[self.spinner_frame % frames.len()];
-        
+
         // Apply no styling to match the Go version exactly
         frame.to_string()
     }
@@ -81,7 +81,9 @@ impl Model for RealtimeModel {
         let model = RealtimeModel::new();
 
         // Start spinner animation, activity generation, and waiting for activity (matching Go's tea.Batch)
-        let spinner_tick = tick(Duration::from_millis(100), |_| Box::new(SpinnerTickMsg) as Msg);
+        let spinner_tick = tick(Duration::from_millis(100), |_| {
+            Box::new(SpinnerTickMsg) as Msg
+        });
         let cmd = batch(vec![
             spinner_tick,          // Start spinner animation
             listen_for_activity(), // Generate activity
@@ -108,7 +110,9 @@ impl Model for RealtimeModel {
         if msg.downcast_ref::<SpinnerTickMsg>().is_some() {
             if !self.quitting {
                 self.advance_spinner();
-                return Some(tick(Duration::from_millis(100), |_| Box::new(SpinnerTickMsg) as Msg));
+                return Some(tick(Duration::from_millis(100), |_| {
+                    Box::new(SpinnerTickMsg) as Msg
+                }));
             }
         }
 

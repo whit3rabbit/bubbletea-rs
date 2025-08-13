@@ -84,7 +84,6 @@ impl SpinnerStyle {
             SpinnerStyle::Monkey,
         ]
     }
-
 }
 
 /// Main model that composes timer and spinner using bubbletea-widgets
@@ -132,7 +131,7 @@ impl MainModel {
     fn spinner_view(&self) -> String {
         let frames = self.get_spinner_frames();
         let frame = frames[self.spinner_frame % frames.len()];
-        
+
         // Apply color styling matching Go example
         Style::new().foreground(Color::from("69")).render(frame)
     }
@@ -144,7 +143,9 @@ impl MainModel {
             SpinnerStyle::Dot => &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
             SpinnerStyle::MiniDot => &["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"],
             SpinnerStyle::Jump => &["⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"],
-            SpinnerStyle::Pulse => &["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▎", "▍", "▌", "▋", "▊", "▉"],
+            SpinnerStyle::Pulse => &[
+                "█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▎", "▍", "▌", "▋", "▊", "▉",
+            ],
             SpinnerStyle::Points => &["∙∙∙", "●∙∙", "∙●∙", "∙∙●", "∙∙∙"],
             SpinnerStyle::Globe => &["🌍", "🌎", "🌏"],
             SpinnerStyle::Moon => &["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
@@ -184,7 +185,7 @@ impl MainModel {
         let left_lines: Vec<&str> = left.lines().collect();
         let right_lines: Vec<&str> = right.lines().collect();
         let max_lines = left_lines.len().max(right_lines.len());
-        
+
         let mut result = Vec::new();
         for i in 0..max_lines {
             let left_line = left_lines.get(i).unwrap_or(&"");
@@ -201,8 +202,10 @@ impl Model for MainModel {
 
         // Start both timer and spinner animations
         let timer_cmd = model.timer_model.start();
-        let spinner_cmd = tick(Duration::from_millis(80), |_| Box::new(SpinnerTickMsg) as Msg);
-        
+        let spinner_cmd = tick(Duration::from_millis(80), |_| {
+            Box::new(SpinnerTickMsg) as Msg
+        });
+
         (model, Some(batch(vec![timer_cmd, spinner_cmd])))
     }
 
@@ -213,7 +216,9 @@ impl Model for MainModel {
         if msg.downcast_ref::<SpinnerTickMsg>().is_some() {
             self.advance_spinner();
             // Schedule next spinner tick
-            cmds.push(tick(Duration::from_millis(80), |_| Box::new(SpinnerTickMsg) as Msg));
+            cmds.push(tick(Duration::from_millis(80), |_| {
+                Box::new(SpinnerTickMsg) as Msg
+            }));
         }
 
         // Handle keyboard input

@@ -6,6 +6,7 @@ members = [
     "examples/cellbuffer",
     "examples/chat",
     "examples/composable-views",
+    "examples/credit-card-form",
     "examples/help",
     "examples/http",
     "examples/list-default",

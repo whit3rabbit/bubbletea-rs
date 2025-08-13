@@ -10,10 +10,6 @@ path = "main.rs"
 
 # Removed debug binaries that don't exist anymore
 
-[[bin]]
-name = "test-list-dots"
-path = "test_list_dots.rs"
-
 [dependencies]
 bubbletea-rs = { path = "../.." }
 bubbletea-widgets = "0.1.9"

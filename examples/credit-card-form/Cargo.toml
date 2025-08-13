@@ -1,0 +1,15 @@
+[package]
+name = "credit-card-form-example"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "credit-card-form"
+path = "main.rs"
+
+[dependencies]
+bubbletea-rs = { path = "../.." }
+crossterm = "0.29"
+tokio = { version = "1.0", features = ["full"] }
+bubbletea-widgets = "0.1.9"
+lipgloss-extras = { version = "0.0.8", features = ["full"] }
