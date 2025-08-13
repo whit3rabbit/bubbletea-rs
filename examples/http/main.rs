@@ -64,8 +64,13 @@ impl Model for HttpModel {
         if let Some(error) = &self.error {
             s.push_str(&format!("something went wrong: {}", error));
         } else if let Some(status) = self.status {
-            let status_code = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-            s.push_str(&format!("{} {}", status, status_code.canonical_reason().unwrap_or("Unknown")));
+            let status_code =
+                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            s.push_str(&format!(
+                "{} {}",
+                status,
+                status_code.canonical_reason().unwrap_or("Unknown")
+            ));
         }
 
         s.push('\n');
@@ -98,7 +103,6 @@ fn check_server() -> Cmd {
         }
     })
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
