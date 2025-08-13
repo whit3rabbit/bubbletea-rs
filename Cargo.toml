@@ -34,6 +34,8 @@ members = [
     "examples/exec",
     "examples/file-picker",
     "examples/focus-blur",
+    "examples/fullscreen",
+    "examples/glamour",
 ]
 
 [patch.crates-io]
