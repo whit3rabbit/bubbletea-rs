@@ -36,6 +36,7 @@ members = [
     "examples/focus-blur",
     "examples/fullscreen",
     "examples/glamour",
+    "examples/mouse",
 ]
 
 [patch.crates-io]

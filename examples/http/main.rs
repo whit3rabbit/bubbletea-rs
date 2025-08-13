@@ -1,5 +1,6 @@
 use bubbletea_rs::{quit, Cmd, KeyMsg, Model, Msg, Program};
 use crossterm::event::{KeyCode, KeyModifiers};
+use http::StatusCode;
 use std::time::Duration;
 
 // A simple program that makes a GET request and prints the response status.
@@ -33,13 +34,11 @@ impl Model for HttpModel {
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            match key_msg.key {
-                KeyCode::Char('q') | KeyCode::Char('c') | KeyCode::Esc => {
-                    if key_msg.key == KeyCode::Char('c')
-                        && !key_msg.modifiers.contains(KeyModifiers::CONTROL)
-                    {
-                        return None;
-                    }
+            match (key_msg.key, key_msg.modifiers) {
+                (KeyCode::Char('q'), _) | (KeyCode::Esc, _) => {
+                    return Some(quit());
+                }
+                (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
                     return Some(quit());
                 }
                 _ => return None,
@@ -65,7 +64,8 @@ impl Model for HttpModel {
         if let Some(error) = &self.error {
             s.push_str(&format!("something went wrong: {}", error));
         } else if let Some(status) = self.status {
-            s.push_str(&format!("{} {}", status, status_text(status)));
+            let status_code = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            s.push_str(&format!("{} {}", status, status_code.canonical_reason().unwrap_or("Unknown")));
         }
 
         s.push('\n');
@@ -99,28 +99,6 @@ fn check_server() -> Cmd {
     })
 }
 
-// Simple status text mapping (subset of HTTP status codes)
-fn status_text(status: u16) -> &'static str {
-    match status {
-        200 => "OK",
-        201 => "Created",
-        204 => "No Content",
-        301 => "Moved Permanently",
-        302 => "Found",
-        304 => "Not Modified",
-        400 => "Bad Request",
-        401 => "Unauthorized",
-        403 => "Forbidden",
-        404 => "Not Found",
-        405 => "Method Not Allowed",
-        429 => "Too Many Requests",
-        500 => "Internal Server Error",
-        502 => "Bad Gateway",
-        503 => "Service Unavailable",
-        504 => "Gateway Timeout",
-        _ => "Unknown",
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

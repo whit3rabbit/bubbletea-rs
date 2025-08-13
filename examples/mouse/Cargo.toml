@@ -1,15 +1,13 @@
 [package]
-name = "http-example"
+name = "mouse-example"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "http-example"
+name = "mouse"
 path = "main.rs"
 
 [dependencies]
 bubbletea-rs = { path = "../../" }
-crossterm = "0.29"
 tokio = { version = "1.25.0", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
-http = "1.3"
+crossterm = "0.29"
