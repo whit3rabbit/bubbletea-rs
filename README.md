@@ -89,7 +89,7 @@ Bubble Tea (Go) popularized a functional, message-passing architecture for build
          │                       │                       │
          │                       ▼                       │
          │              ┌─────────────────┐              │
-         └──────────────►│   bubbletea-rs  │◄─────────────┘
+         └─────────────►│   bubbletea-rs  │◄─────────────┘
                         │   Event Loop    │
                         └─────────────────┘
 ```
@@ -166,8 +166,8 @@ Please see [CLAUDE.md](CLAUDE.md) for development guidelines and architectural n
 | Component | Status | Version | Notes |
 |-----------|--------|---------|-------|
 | bubbletea-rs | ✅ Active | v0.0.6 | Core framework stable |
-| bubbletea-widgets | ✅ Active | v0.0.6 | 13+ widgets available |
-| lipgloss-extras | ✅ Active | v0.0.7 | Full styling support |
+| bubbletea-widgets | ✅ Active | v0.1.9 | 13+ widgets available |
+| lipgloss-extras | ✅ Active | v0.0.8 | Full styling support |
 
 ## Inspiration & Credits
 

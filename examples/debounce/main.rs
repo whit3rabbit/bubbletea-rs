@@ -46,7 +46,7 @@ impl Model for DebounceModel {
             // Increment the tag on the model...
             self.tag += 1;
             let current_tag = self.tag;
-            
+
             // ...and schedule an exit message with a copy of that tag value
             return Some(tick(DEBOUNCE_DURATION, move |_| {
                 Box::new(ExitMsg(current_tag)) as Msg

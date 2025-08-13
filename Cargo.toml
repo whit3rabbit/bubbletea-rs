@@ -32,6 +32,7 @@ members = [
     "examples/stopwatch",
     "examples/debounce",
     "examples/exec",
+    "examples/file-picker",
 ]
 
 [patch.crates-io]

@@ -1,9 +1,6 @@
 use std::env;
 
-use bubbletea_rs::{
-    KeyMsg, Msg, Model, Program, Cmd,
-    enter_alt_screen, exit_alt_screen, quit,
-};
+use bubbletea_rs::{enter_alt_screen, exit_alt_screen, quit, Cmd, KeyMsg, Model, Msg, Program};
 use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
 
 // Synthetic message used to trigger the initial render immediately after startup.
@@ -29,7 +26,10 @@ pub struct KeyBindings {
 impl Default for KeyBindings {
     fn default() -> Self {
         Self {
-            toggle_altscreen: new_binding(vec![with_keys_str(&["a"]), with_help("a", "toggle altscreen")]),
+            toggle_altscreen: new_binding(vec![
+                with_keys_str(&["a"]),
+                with_help("a", "toggle altscreen"),
+            ]),
             open_editor: new_binding(vec![with_keys_str(&["e"]), with_help("e", "open editor")]),
             quit: new_binding(vec![
                 with_keys_str(&["q", "ctrl+c"]),
@@ -41,31 +41,27 @@ impl Default for KeyBindings {
 
 fn open_editor() -> Cmd {
     let editor = env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-    
+
     Box::pin(async move {
         use std::process::{Command, Stdio};
-        
+
         // Create a command that inherits stdin/stdout/stderr to allow interactive editing
         let mut cmd = Command::new(&editor);
         cmd.stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit());
-        
+
         // Execute the command and wait for it to complete
         match cmd.status() {
             Ok(status) if status.success() => {
                 Some(Box::new(EditorFinishedMsg { err: None }) as Msg)
             }
-            Ok(_) => {
-                Some(Box::new(EditorFinishedMsg { 
-                    err: Some("Editor exited with non-zero status".to_string())
-                }) as Msg)
-            }
-            Err(e) => {
-                Some(Box::new(EditorFinishedMsg { 
-                    err: Some(format!("Failed to execute editor: {}", e))
-                }) as Msg)
-            }
+            Ok(_) => Some(Box::new(EditorFinishedMsg {
+                err: Some("Editor exited with non-zero status".to_string()),
+            }) as Msg),
+            Err(e) => Some(Box::new(EditorFinishedMsg {
+                err: Some(format!("Failed to execute editor: {}", e)),
+            }) as Msg),
         }
     })
 }
@@ -97,11 +93,11 @@ impl Model for ExecModel {
                     exit_alt_screen()
                 });
             }
-            
+
             if self.keys.open_editor.matches(key_msg) {
                 return Some(open_editor());
             }
-            
+
             if self.keys.quit.matches(key_msg) {
                 return Some(quit());
             }
@@ -111,7 +107,7 @@ impl Model for ExecModel {
                 return Some(quit());
             }
         }
-        
+
         None
     }
 
@@ -137,8 +133,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let program = Program::<ExecModel>::builder()
         .signal_handler(true)
         .build()?;
-    
+
     program.run().await?;
-    
+
     Ok(())
 }
