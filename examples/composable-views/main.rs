@@ -11,13 +11,17 @@
 //! with multiple styles. Users can switch focus between views and interact with
 //! each component independently.
 
-use bubbletea_rs::{batch, quit, Cmd, KeyMsg, Model, Msg, Program};
+use bubbletea_rs::{batch, quit, tick, Cmd, KeyMsg, Model, Msg, Program};
 use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
-use bubbletea_widgets::{spinner, timer};
+use bubbletea_widgets::timer;
 
 use lipgloss_extras::lipgloss::position::CENTER;
 use lipgloss_extras::lipgloss::{border, Color, Style};
 use std::time::Duration;
+
+/// Message for spinner animation ticks
+#[derive(Debug)]
+pub struct SpinnerTickMsg;
 
 /// Key bindings for the composable views example
 #[derive(Debug)]
@@ -81,19 +85,6 @@ impl SpinnerStyle {
         ]
     }
 
-    fn to_widget_spinner(&self) -> spinner::Spinner {
-        match self {
-            SpinnerStyle::Line => spinner::LINE.clone(),
-            SpinnerStyle::Dot => spinner::DOT.clone(),
-            SpinnerStyle::MiniDot => spinner::MINI_DOT.clone(),
-            SpinnerStyle::Jump => spinner::JUMP.clone(),
-            SpinnerStyle::Pulse => spinner::PULSE.clone(),
-            SpinnerStyle::Points => spinner::POINTS.clone(),
-            SpinnerStyle::Globe => spinner::GLOBE.clone(),
-            SpinnerStyle::Moon => spinner::MOON.clone(),
-            SpinnerStyle::Monkey => spinner::MONKEY.clone(),
-        }
-    }
 }
 
 /// Main model that composes timer and spinner using bubbletea-widgets
@@ -101,7 +92,7 @@ impl SpinnerStyle {
 struct MainModel {
     state: SessionState,
     timer_model: timer::Model,
-    spinner_model: spinner::Model,
+    spinner_frame: usize,
     spinner_styles: Vec<SpinnerStyle>,
     current_spinner_index: usize,
     keys: KeyBindings,
@@ -115,17 +106,10 @@ impl MainModel {
         // Create timer widget (60 second countdown)
         let timer_model = timer::new(Duration::from_secs(60));
 
-        // Create spinner widget with faster animation than timer
-        // Using DOT spinner with custom faster interval (80ms vs 1000ms timer)
-        let spinner_model = spinner::new(&[
-            spinner::with_spinner(spinner_styles[current_spinner_index].to_widget_spinner()),
-            spinner::with_style(Style::new().foreground(Color::from("69"))), // Match Go example color
-        ]);
-
         Self {
             state: SessionState::TimerView,
             timer_model,
-            spinner_model,
+            spinner_frame: 0,
             spinner_styles,
             current_spinner_index,
             keys: KeyBindings::default(),
@@ -141,13 +125,37 @@ impl MainModel {
 
     fn next_spinner(&mut self) {
         self.current_spinner_index = (self.current_spinner_index + 1) % self.spinner_styles.len();
-        let new_spinner = self.spinner_styles[self.current_spinner_index].to_widget_spinner();
+        self.spinner_frame = 0; // Reset frame when changing spinner style
+    }
 
-        // Create new spinner with updated style
-        self.spinner_model = spinner::new(&[
-            spinner::with_spinner(new_spinner),
-            spinner::with_style(Style::new().foreground(Color::from("69"))),
-        ]);
+    /// Get the current spinner frame display based on current style
+    fn spinner_view(&self) -> String {
+        let frames = self.get_spinner_frames();
+        let frame = frames[self.spinner_frame % frames.len()];
+        
+        // Apply color styling matching Go example
+        Style::new().foreground(Color::from("69")).render(frame)
+    }
+
+    /// Get frames for the current spinner style
+    fn get_spinner_frames(&self) -> &'static [&'static str] {
+        match self.spinner_styles[self.current_spinner_index] {
+            SpinnerStyle::Line => &["|", "/", "-", "\\"],
+            SpinnerStyle::Dot => &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+            SpinnerStyle::MiniDot => &["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"],
+            SpinnerStyle::Jump => &["⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"],
+            SpinnerStyle::Pulse => &["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▎", "▍", "▌", "▋", "▊", "▉"],
+            SpinnerStyle::Points => &["∙∙∙", "●∙∙", "∙●∙", "∙∙●", "∙∙∙"],
+            SpinnerStyle::Globe => &["🌍", "🌎", "🌏"],
+            SpinnerStyle::Moon => &["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
+            SpinnerStyle::Monkey => &["🙈", "🙉", "🙊"],
+        }
+    }
+
+    /// Advance to the next spinner frame
+    fn advance_spinner(&mut self) {
+        let frames = self.get_spinner_frames();
+        self.spinner_frame = (self.spinner_frame + 1) % frames.len();
     }
 
     /// Style for the focused model box
@@ -170,20 +178,43 @@ impl MainModel {
             .align_vertical(CENTER)
             .border(border::hidden_border())
     }
+
+    /// Join two views horizontally with proper spacing
+    fn join_horizontal(left: &str, right: &str) -> String {
+        let left_lines: Vec<&str> = left.lines().collect();
+        let right_lines: Vec<&str> = right.lines().collect();
+        let max_lines = left_lines.len().max(right_lines.len());
+        
+        let mut result = Vec::new();
+        for i in 0..max_lines {
+            let left_line = left_lines.get(i).unwrap_or(&"");
+            let right_line = right_lines.get(i).unwrap_or(&"");
+            result.push(format!("{}{}", left_line, right_line));
+        }
+        result.join("\n")
+    }
 }
 
 impl Model for MainModel {
     fn init() -> (Self, Option<Cmd>) {
         let model = MainModel::new();
 
-        // Start timer only - spinners are passive widgets
+        // Start both timer and spinner animations
         let timer_cmd = model.timer_model.start();
-
-        (model, Some(timer_cmd))
+        let spinner_cmd = tick(Duration::from_millis(80), |_| Box::new(SpinnerTickMsg) as Msg);
+        
+        (model, Some(batch(vec![timer_cmd, spinner_cmd])))
     }
 
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         let mut cmds: Vec<Cmd> = Vec::new();
+
+        // Handle spinner tick messages
+        if msg.downcast_ref::<SpinnerTickMsg>().is_some() {
+            self.advance_spinner();
+            // Schedule next spinner tick
+            cmds.push(tick(Duration::from_millis(80), |_| Box::new(SpinnerTickMsg) as Msg));
+        }
 
         // Handle keyboard input
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
@@ -208,7 +239,6 @@ impl Model for MainModel {
                     SessionState::SpinnerView => {
                         // Change to next spinner style
                         self.next_spinner();
-                        // Note: spinners are passive, no command needed
                     }
                 }
             }
@@ -218,9 +248,6 @@ impl Model for MainModel {
         if let Some(timer_cmd) = self.timer_model.update(msg) {
             cmds.push(timer_cmd);
         }
-
-        // Spinner widgets are passive and don't need message updates
-        // They just render their current animation state
 
         // Return commands
         match cmds.len() {
@@ -247,15 +274,16 @@ impl Model for MainModel {
             Self::model_style().render(&format!("{:>4}", timer_display))
         };
 
-        // Render spinner view - the widget handles the animation and centering
+        // Render spinner view using manual frame animation
+        let spinner_display = self.spinner_view();
         let spinner_view = if self.state == SessionState::SpinnerView {
-            Self::focused_style().render(&self.spinner_model.view())
+            Self::focused_style().render(&spinner_display)
         } else {
-            Self::model_style().render(&self.spinner_model.view())
+            Self::model_style().render(&spinner_display)
         };
 
         // Join horizontally (side by side)
-        let views = format!("{}{}", timer_view, spinner_view);
+        let views = Self::join_horizontal(&timer_view, &spinner_view);
 
         // Help text with styling matching Go version
         let help_style = Style::new().foreground(Color::from("241"));
