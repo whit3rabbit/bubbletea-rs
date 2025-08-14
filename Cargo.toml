@@ -39,6 +39,9 @@ members = [
     "examples/mouse",
     "examples/pipe",
     "examples/prevent-quit",
+    "examples/send-msg",
+    "examples/sequence",
+    "examples/set-window-title",
 ]
 
 [patch.crates-io]
