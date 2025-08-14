@@ -1,105 +1,87 @@
 //! Simple Example
 //!
-//! A basic countdown timer that demonstrates:
-//! - Timer messages using the `every()` command
-//! - Keyboard input handling (q, Ctrl+C, Ctrl+Z)
-//! - Basic state management
-//! - Automatic program termination
+//! A simple program that counts down from 5 and then exits.
 //!
-//! This example counts down from 5 to 0 and then exits automatically.
+//! This is a faithful port of the Go Bubble Tea simple example, demonstrating:
+//! - Basic countdown timer with custom tick messages  
+//! - Direct keyboard input handling (q, Ctrl+C, Ctrl+Z)
+//! - Simple integer model state
+//! - Automatic program termination
 
-use bubbletea_rs::{quit, suspend, tick, Cmd, KeyMsg, Model, Msg, Program, QuitMsg};
-use bubbletea_widgets::key::{new_binding, with_help, with_keys_str, Binding};
+use bubbletea_rs::{quit, suspend, Cmd, KeyMsg, Model, Msg, Program};
+use crossterm::event::{KeyCode, KeyModifiers};
 use std::time::Duration;
 
-/// Custom message type for timer ticks
+// A model can be more or less any type of data. It holds all the data for a
+// program, so often it's a struct. For this simple example, however, all
+// we'll need is a simple integer.
 #[derive(Debug)]
-pub struct TickMsg;
-
-/// Key bindings for the simple example
-#[derive(Debug)]
-pub struct KeyBindings {
-    pub quit: Binding,
-    pub suspend: Binding,
-}
-
-impl Default for KeyBindings {
-    fn default() -> Self {
-        Self {
-            quit: new_binding(vec![with_keys_str(&["q"]), with_help("q", "quit")]),
-            suspend: new_binding(vec![
-                with_keys_str(&["ctrl+z"]),
-                with_help("ctrl+z", "suspend"),
-            ]),
-        }
-    }
-}
-
-/// The model represents our application state - just a simple counter
-#[derive(Debug)]
-pub struct SimpleModel {
-    pub count: i32,
-    pub keys: KeyBindings,
-}
+struct SimpleModel(i32);
 
 impl Model for SimpleModel {
+    // Init optionally returns an initial command we should run. In this case we
+    // want to start the timer.
     fn init() -> (Self, Option<Cmd>) {
-        // Start with count of 5 and begin the timer
-        let model = SimpleModel {
-            count: 5,
-            keys: KeyBindings::default(),
-        };
-        let cmd = tick(Duration::from_secs(1), |_| Box::new(TickMsg) as Msg);
-        (model, Some(cmd))
+        (SimpleModel(5), Some(tick()))
     }
 
+    // Update is called when messages are received. The idea is that you inspect the
+    // message and send back an updated model accordingly. You can also return
+    // a command, which is a function that performs I/O and returns a message.
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
-        // Handle keyboard input using key bindings
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            if self.keys.quit.matches(key_msg) {
-                return Some(quit());
-            }
-            if self.keys.suspend.matches(key_msg) {
-                return Some(suspend());
+            match key_msg.key {
+                KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
+                    return Some(quit());
+                }
+                KeyCode::Char('q') => {
+                    return Some(quit());
+                }
+                KeyCode::Char('z') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
+                    return Some(suspend());
+                }
+                _ => {}
             }
         }
 
-        // Handle timer ticks
-        if msg.downcast_ref::<TickMsg>().is_some() {
-            self.count -= 1;
-
-            // If countdown reaches 0, quit automatically
-            if self.count <= 0 {
+        if let Some(_tick_msg) = msg.downcast_ref::<TickMsg>() {
+            self.0 -= 1;
+            if self.0 <= 0 {
                 return Some(quit());
             }
-
-            // Re-arm next single-shot tick
-            return Some(tick(Duration::from_secs(1), |_| Box::new(TickMsg) as Msg));
-        }
-
-        // Handle quit messages
-        if msg.downcast_ref::<QuitMsg>().is_some() {
-            // Program is quitting - no further commands needed
-            return None;
+            return Some(tick());
         }
 
         None
     }
 
+    // View returns a string based on data in the model. That string which will be
+    // rendered to the terminal.
     fn view(&self) -> String {
         format!(
             "Hi. This program will exit in {} seconds.\n\nTo quit sooner press ctrl-c, or press ctrl-z to suspend...\n",
-            self.count
+            self.0
         )
     }
 }
 
+// Messages are events that we respond to in our Update function. This
+// particular one indicates that the timer has ticked.
+#[derive(Debug)]
+struct TickMsg;
+
+fn tick() -> Cmd {
+    Box::pin(async {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        Some(Box::new(TickMsg) as Msg)
+    })
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create and run the program with default settings
+    // Initialize our program
     let program = Program::<SimpleModel>::builder()
-        .signal_handler(true) // Enable Ctrl+C handling
-        .alt_screen(false) // Match Go version - no alternate screen
+        .signal_handler(true)
         .build()?;
 
     program.run().await?;

@@ -42,6 +42,7 @@ members = [
     "examples/send-msg",
     "examples/sequence",
     "examples/set-window-title",
+    "examples/split-editors",
 ]
 
 [patch.crates-io]
