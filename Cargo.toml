@@ -37,6 +37,7 @@ members = [
     "examples/fullscreen",
     "examples/glamour",
     "examples/mouse",
+    "examples/pipe",
 ]
 
 [patch.crates-io]

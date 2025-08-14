@@ -32,7 +32,7 @@ Add `bubbletea-widgets` to your `Cargo.toml`. You will also need `bubbletea-rs` 
 
 ```toml
 [dependencies]
-bubbletea-widgets = "0.1.9"
+bubbletea-widgets = "0.1.10"
 bubbletea-rs = "0.0.6"
 lipgloss-extras = { version = "0.0.8", features = ["full"] }
 ```
@@ -756,36 +756,125 @@ impl BubbleTeaModel for App {
 
 ### Help
 
-A mini help view that automatically generates its content from a `KeyMap`.
+A help component that automatically generates contextual help views from key bindings. It supports both compact single-line displays and expanded multi-column layouts with adaptive styling for light and dark terminal themes.
+
+#### Key Features
+
+- **Dual Display Modes**: Switch between compact and expanded help views
+- **Adaptive Styling**: Automatically adjusts colors for light/dark themes  
+- **Width Constraints**: Truncates content with ellipsis when space is limited
+- **Column Layout**: Organizes key bindings into logical, aligned columns
+- **Disabled Key Handling**: Automatically hides disabled key bindings
 
 #### Creating a Help View
 
 **`help::new() -> Model`**
-Creates a new help model.
+Creates a new help model with default settings.
+
+**`help::Model::new().with_width(width: usize) -> Model`**  
+Creates a help model with width constraints for truncation.
 
 #### Public API
 
 | Method                                        | Description                                                          |
 | --------------------------------------------- | -------------------------------------------------------------------- |
 | `view<K: KeyMap>(&self, keymap: &K) -> String` | Renders the help view based on the provided key map.                 |
+| `with_width(self, width: usize) -> Self`     | Sets maximum width with ellipsis truncation.                        |
+| `update(self, msg: Msg) -> (Self, Option<Cmd>)` | Compatibility method (no-op for help component).                    |
 | `show_all: bool` (field)                      | Toggles between short (single-line) and full (multi-column) help.    |
+| `width: usize` (field)                        | Maximum width in characters (0 = no limit).                         |
+| `styles: Styles` (field)                      | Styling configuration for all visual elements.                      |
 
-#### Usage Example
+#### View Modes
+
+**Short Help Mode (`show_all = false`)**
+Displays key bindings in a horizontal line with bullet separators:
+```text
+↑/k up • ↓/j down • / filter • q quit • ? more
+```
+
+**Full Help Mode (`show_all = true`)**  
+Displays key bindings in organized columns:
+```text
+↑/k      up             / filter         q quit
+↓/j      down           esc clear filter ? close help
+→/l/pgdn next page      enter apply
+←/h/pgup prev page
+```
+
+#### KeyMap Implementation Guidelines
+
+The `help::KeyMap` trait defines how your application exposes key bindings:
+
+- **`short_help()`**: Returns 3-6 essential keys for compact display
+- **`full_help()`**: Returns grouped key bindings organized into logical columns
+
+```rust
+use bubbletea_widgets::help::KeyMap;
+use bubbletea_widgets::key::Binding;
+
+impl KeyMap for MyApp {
+    fn short_help(&self) -> Vec<&bubbletea_widgets::key::Binding> {
+        vec![&self.quit_key, &self.save_key, &self.help_key]
+    }
+
+    fn full_help(&self) -> Vec<Vec<&bubbletea_widgets::key::Binding>> {
+        vec![
+            // Column 1: Navigation
+            vec![&self.up_key, &self.down_key, &self.next_page, &self.prev_page],
+            // Column 2: Actions  
+            vec![&self.save_key, &self.delete_key, &self.edit_key],
+            // Column 3: App Control
+            vec![&self.help_key, &self.quit_key],
+        ]
+    }
+}
+```
+
+#### Basic Usage Example
 
 ```rust
 use bubbletea_widgets::prelude::*;
-use bubbletea_widgets::key::{Binding, KeyMap, new_binding, with_keys_str, with_help, matches_binding};
+use bubbletea_widgets::key::{Binding, new_binding, with_keys_str, with_help, matches_binding};
+use bubbletea_widgets::help::{Model as HelpModel, KeyMap};
 use bubbletea_rs::{KeyMsg, Model as BubbleTeaModel, Msg};
 
-// 1. Define your KeyMap
-struct AppKeyMap { 
+struct AppKeyMap {
+    quit: Binding,
+    save: Binding, 
     help: Binding,
 }
 
-// 2. Implement the help::KeyMap trait
+impl Default for AppKeyMap {
+    fn default() -> Self {
+        Self {
+            quit: new_binding(vec![
+                with_keys_str(&["q", "ctrl+c"]),
+                with_help("q/ctrl+c", "quit"),
+            ]),
+            save: new_binding(vec![
+                with_keys_str(&["ctrl+s"]),
+                with_help("ctrl+s", "save"),
+            ]),
+            help: new_binding(vec![
+                with_keys_str(&["?"]),
+                with_help("?", "toggle help"),
+            ]),
+        }
+    }
+}
+
 impl KeyMap for AppKeyMap {
-    fn short_help(&self) -> Vec<&Binding> { vec![&self.help] }
-    fn full_help(&self) -> Vec<Vec<&Binding>> { vec![vec![&self.help]] }
+    fn short_help(&self) -> Vec<&bubbletea_widgets::key::Binding> {
+        vec![&self.save, &self.quit, &self.help]
+    }
+
+    fn full_help(&self) -> Vec<Vec<&bubbletea_widgets::key::Binding>> {
+        vec![
+            vec![&self.save],       // File operations
+            vec![&self.help, &self.quit], // App control
+        ]
+    }
 }
 
 struct App {
@@ -795,14 +884,9 @@ struct App {
 
 impl BubbleTeaModel for App {
     fn init() -> (Self, Option<bubbletea_rs::Cmd>) {
-        let help_binding = new_binding(vec![
-            with_keys_str(&["?"]),
-            with_help("?", "toggle help"),
-        ]);
-        
         (Self {
-            keymap: AppKeyMap { help: help_binding },
-            help: HelpModel::new(),
+            keymap: AppKeyMap::default(),
+            help: HelpModel::new().with_width(80),
         }, None)
     }
 
@@ -810,13 +894,19 @@ impl BubbleTeaModel for App {
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
             if matches_binding(key_msg, &self.keymap.help) {
                 self.help.show_all = !self.help.show_all;
+                return None;
+            }
+            if matches_binding(key_msg, &self.keymap.quit) {
+                return Some(bubbletea_rs::quit());
             }
         }
         None
     }
 
     fn view(&self) -> String {
-        format!("Content...\n\n{}", self.help.view(&self.keymap))
+        let content = "Your application content here...";
+        let help_view = self.help.view(&self.keymap);
+        format!("{}\n\n{}", content, help_view)
     }
 }
 ```
@@ -1300,24 +1390,28 @@ Message type for directory reading operations.
 | `view(&self) -> String`                        | Renders the file list with current configuration.                           |
 | `did_select_file(&self, msg: &Msg) -> (bool, String)` | Returns whether a user has selected a file and the file path. Only returns `true` for files that can actually be selected. |
 | `did_select_disabled_file(&self, msg: &Msg) -> (bool, String)` | Returns whether a user tried to select a disabled file and the file path. |
-| `set_height(&mut self, height: i32)`           | Sets the height of the file picker when auto_height is disabled.            |
+| `set_height(&mut self, height: usize)`         | Sets the height of the file picker when auto_height is disabled.            |
+| `read_dir(&mut self)`                          | Manually reads the current directory and populates the files list.          |
+| `read_dir_cmd(&self) -> Cmd`                   | Creates a command to read the current directory asynchronously.             |
 
 #### Configuration Fields
 
 | Field                    | Type                                           | Description                                    |
 | ------------------------ | ---------------------------------------------- | ---------------------------------------------- |
-| `allow_file_selection`   | `bool`                                        | Whether files can be selected                  |
-| `allow_dir_selection`    | `bool`                                        | Whether directories can be selected            |
+| `file_allowed`           | `bool`                                        | Whether files can be selected                  |
+| `dir_allowed`            | `bool`                                        | Whether directories can be selected            |
 | `show_hidden`            | `bool`                                        | Whether to display hidden files                |
 | `show_permissions`       | `bool`                                        | Whether to display file permissions            |
 | `show_size`              | `bool`                                        | Whether to display file sizes                  |
 | `auto_height`            | `bool`                                        | Whether to automatically adjust height         |
-| `height`                 | `i32`                                         | Fixed height when auto_height is false         |
-| `max_entries`            | `Option<usize>`                               | Maximum number of entries to display           |
-| `min_height`             | `i32`                                         | Minimum height constraint                      |
-| `max_height`             | `i32`                                         | Maximum height constraint                      |
-| `dir_allowed`            | `Option<Box<dyn Fn(&DirEntry) -> bool>>`     | Filter for allowed directories                 |
-| `file_allowed`           | `Option<Box<dyn Fn(&DirEntry) -> bool>>`     | Filter for allowed files                       |
+| `height`                 | `usize`                                       | Fixed height when auto_height is false         |
+| `current_directory`      | `PathBuf`                                     | The directory currently being browsed          |
+| `allowed_types`          | `Vec<String>`                                 | File extensions that can be selected           |
+| `file_selected`          | `String`                                      | Name of the most recently selected file        |
+| `cursor`                 | `String`                                      | The cursor string to display (e.g., "> ")     |
+| `error`                  | `Option<String>`                              | Error message for failed directory operations  |
+| `keymap`                 | `FilepickerKeyMap`                            | Key bindings configuration                     |
+| `styles`                 | `Styles`                                      | Visual styling configuration                   |
 
 #### Key Features
 
@@ -1362,6 +1456,22 @@ impl BubbleTeaModel for App {
     }
 }
 ```
+
+#### Running the Example
+
+A complete, runnable filepicker example is available:
+
+```bash
+cargo run --manifest-path examples/filepicker/Cargo.toml
+```
+
+This example demonstrates:
+- Keyboard navigation (arrow keys, j/k, h/l)
+- File filtering by allowed types (.mod, .sum, .go, .txt, .md, .rs, .toml)
+- Permission and size display
+- Proper error handling and status messages
+- Escape key, 'q', or Ctrl+C to quit
+- Enter to select files
 
 ### Cursor
 

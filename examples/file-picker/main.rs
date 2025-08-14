@@ -1,7 +1,8 @@
 //! File Picker Example (Rust, using bubbletea-widgets)
 //!
 //! Port of Bubble Tea's `file-picker` example using `bubbletea-widgets::filepicker`.
-// TODO: Fix tree view for file-pcker
+//! This example demonstrates the improved filepicker with proper message ordering,
+//! robust viewport handling, and better user experience.
 
 use bubbletea_rs::{quit, tick, Cmd, KeyMsg, Model, Msg, Program};
 use bubbletea_widgets::filepicker;
@@ -17,6 +18,7 @@ struct ClearErrorMsg;
 pub struct KeyBindings {
     pub quit: Binding,
     pub quit_alt: Binding,
+    pub quit_escape: Binding,
 }
 
 impl Default for KeyBindings {
@@ -27,6 +29,7 @@ impl Default for KeyBindings {
                 with_keys_str(&["ctrl+c"]),
                 with_help("ctrl+c", "quit"),
             ]),
+            quit_escape: new_binding(vec![with_keys_str(&["esc"]), with_help("esc", "quit")]),
         }
     }
 }
@@ -60,8 +63,8 @@ impl FilePickerModel {
 
 impl Model for FilePickerModel {
     fn init() -> (Self, Option<Cmd>) {
-        // Create and configure the filepicker directly
-        let (mut fp_model, cmd) = filepicker::Model::init();
+        // Create and configure the filepicker using the standard init pattern
+        let (mut fp_model, init_cmd) = filepicker::Model::init();
 
         // Configure the filepicker to match the Go version
         fp_model.file_allowed = true;
@@ -72,6 +75,8 @@ impl Model for FilePickerModel {
             ".go".to_string(),
             ".txt".to_string(),
             ".md".to_string(),
+            ".rs".to_string(),
+            ".toml".to_string(),
         ];
         fp_model.show_hidden = false;
         fp_model.show_permissions = true;
@@ -81,14 +86,11 @@ impl Model for FilePickerModel {
         fp_model.set_height(15);
         fp_model.auto_height = true;
 
-        // Force re-read directory to properly initialize min/max based on height
-        // The filepicker needs to populate its file list to set viewport correctly
-
-        // Set starting directory to user's home directory
+        // Set the starting directory on the model itself (avoid changing process CWD)
         if let Ok(home_dir) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
-            if let Ok(_) = std::env::set_current_dir(&home_dir) {
-                // Successfully changed to home directory
-            }
+            fp_model.current_directory = std::path::PathBuf::from(home_dir);
+            // Re-read directory after changing the path
+            fp_model.read_dir();
         }
 
         let model = Self {
@@ -100,9 +102,9 @@ impl Model for FilePickerModel {
         };
 
         // Send a window size command to initialize the viewport properly
-        let window_size_cmd = bubbletea_rs::command::window_size();
+        let window_size_cmd = bubbletea_rs::window_size();
 
-        if let Some(init_cmd) = cmd {
+        if let Some(init_cmd) = init_cmd {
             (
                 model,
                 Some(bubbletea_rs::batch(vec![init_cmd, window_size_cmd])),
@@ -115,7 +117,10 @@ impl Model for FilePickerModel {
     fn update(&mut self, msg: Msg) -> Option<Cmd> {
         // Handle quit keys
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
-            if self.keys.quit.matches(key_msg) || self.keys.quit_alt.matches(key_msg) {
+            if self.keys.quit.matches(key_msg)
+                || self.keys.quit_alt.matches(key_msg)
+                || self.keys.quit_escape.matches(key_msg)
+            {
                 self.quitting = true;
                 return Some(quit());
             }
@@ -132,10 +137,11 @@ impl Model for FilePickerModel {
             return self.filepicker.update(msg);
         }
 
-        // Check if user selected a file (not directory)
+        // Check if user selected a file (not directory) - quit immediately like Go version
         if let (true, path) = self.filepicker.did_select_file(&msg) {
             self.selected_file = path;
-            return None; // Don't continue processing since we got a valid selection
+            self.quitting = true;
+            return Some(quit()); // Quit immediately upon selection
         }
 
         // Check if user selected a disabled file
@@ -156,9 +162,7 @@ impl Model for FilePickerModel {
         }
 
         // Update the file picker
-        let cmd = self.filepicker.update(msg);
-
-        cmd
+        self.filepicker.update(msg)
     }
 
     fn view(&self) -> String {
@@ -170,8 +174,9 @@ impl Model for FilePickerModel {
         output.push_str("\n  ");
 
         if let Some(error) = &self.error {
-            // Display error message with disabled file style
-            output.push_str(error);
+            // Style error message using filepicker's disabled file style for better UX
+            let error_style = self.filepicker.styles.disabled_file.clone();
+            output.push_str(&error_style.render(error));
         } else if self.selected_file.is_empty() {
             output.push_str("Pick a file:");
         } else {

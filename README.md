@@ -26,7 +26,7 @@ Add these dependencies to your `Cargo.toml`:
 ```toml
 [dependencies]
 bubbletea-rs = "0.0.6"
-bubbletea-widgets = "0.1.9" 
+bubbletea-widgets = "0.1.10" 
 lipgloss-extras = { version = "0.0.8", features = ["full"] }
 ```
 
