@@ -1,0 +1,15 @@
+[package]
+name = "prevent-quit"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "prevent-quit"
+path = "main.rs"
+
+[dependencies]
+bubbletea-rs = { path = "../.." }
+bubbletea-widgets = "0.1.1"
+lipgloss-extras = { version = "0.0.8", features = ["full"] }
+crossterm = { version = "0.29.0", features = ["event-stream"] }
+tokio = { version = "1.0", features = ["full"] }

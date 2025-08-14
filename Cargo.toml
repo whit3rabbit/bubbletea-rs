@@ -38,6 +38,7 @@ members = [
     "examples/glamour",
     "examples/mouse",
     "examples/pipe",
+    "examples/prevent-quit",
 ]
 
 [patch.crates-io]
