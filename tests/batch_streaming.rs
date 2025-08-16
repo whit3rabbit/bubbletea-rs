@@ -10,8 +10,12 @@ struct SlowMsg;
 #[tokio::test]
 async fn batch_streams_messages_as_ready() {
     // Fast (10ms) and slow (300ms) commands
-    let fast = command::tick(Duration::from_millis(10), |_| Box::new(FastMsg) as bubbletea_rs::Msg);
-    let slow = command::tick(Duration::from_millis(300), |_| Box::new(SlowMsg) as bubbletea_rs::Msg);
+    let fast = command::tick(Duration::from_millis(10), |_| {
+        Box::new(FastMsg) as bubbletea_rs::Msg
+    });
+    let slow = command::tick(Duration::from_millis(300), |_| {
+        Box::new(SlowMsg) as bubbletea_rs::Msg
+    });
 
     // Act: run batch, which should immediately return a BatchCmdMsg for non-blocking execution
     let batch_cmd = command::batch(vec![fast, slow]);
