@@ -1,4 +1,6 @@
-# Text Input Example - Bubbletea-rs Tutorial
+# Text Input Example
+
+<img width="1200" src="./textinput.gif" />
 
 This example demonstrates how to create an interactive text input field using the `bubbletea-rs` framework and its `bubbletea-widgets` library. If you're new to TUI (Terminal User Interface) development or the Bubbletea framework, this guide will walk you through everything you need to know.
 

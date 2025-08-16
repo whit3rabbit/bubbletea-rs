@@ -1,7 +1,5 @@
 # Advanced Timer Example
 
-<img width="1200" src="./timer-advanced.gif" />
-
 A comprehensive timer application showcasing the **bubbletea-widgets** ecosystem. This example demonstrates how to build sophisticated TUI applications using reusable widget components with proper key binding management, visual styling, and responsive layouts.
 
 ## 🚀 Features

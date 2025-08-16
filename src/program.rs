@@ -575,6 +575,7 @@ impl<M: Model> Program<M> {
                         }
                         // Check for special internal messages
                         let mut should_quit = false;
+                        let mut should_interrupt = false;
 
                         // Handle special internal messages that need to consume the message
                         if msg.is::<crate::event::ClearScreenMsg>() {
@@ -666,6 +667,9 @@ impl<M: Model> Program<M> {
                                     if batch_item.downcast_ref::<QuitMsg>().is_some() {
                                         should_quit = true;
                                     }
+                                    if batch_item.downcast_ref::<crate::InterruptMsg>().is_some() {
+                                        should_interrupt = true;
+                                    }
                                     if let Some(new_cmd) = model.update(batch_item) {
                                         next_cmds.push(new_cmd);
                                     }
@@ -701,9 +705,13 @@ impl<M: Model> Program<M> {
                         } else {
                             // Handle regular messages
                             let is_quit = msg.downcast_ref::<QuitMsg>().is_some();
+                            let is_interrupt = msg.downcast_ref::<crate::InterruptMsg>().is_some();
                             cmd = model.update(msg);
                             if is_quit {
                                 should_quit = true;
+                            }
+                            if is_interrupt {
+                                should_interrupt = true;
                             }
 
                             // Update memory monitoring
@@ -713,6 +721,9 @@ impl<M: Model> Program<M> {
                         }
                         if should_quit {
                             break Ok(model);
+                        }
+                        if should_interrupt {
+                            break Err(Error::Interrupted);
                         }
                         if let Some(terminal) = &mut self.terminal {
                             let view = model.view();

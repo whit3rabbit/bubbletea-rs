@@ -1,88 +1,130 @@
-# bubbletea-rs Examples
+## Examples Gallery
 
-This directory contains runnable examples for bubbletea-rs. A few tips will help you get the best experience across terminals.
+### [Altscreen Toggle](./altscreen-toggle/)
+![Altscreen Toggle](./altscreen-toggle/altscreen-toggle.gif)
 
-## How to run
+### [Autocomplete](./autocomplete/)
+![Autocomplete](./autocomplete/autocomplete.gif)
 
-From the project root:
+### [Cellbuffer](./cellbuffer/)
+![Cellbuffer](./cellbuffer/cellbuffer.gif)
 
-```bash
-# List examples (cargo-style)
-cargo run --example <name>
+### [Chat](./chat/)
+![Chat](./chat/chat.gif)
 
-# Or run an example packaged as its own crate
-cargo run -p <package> --bin <bin>
+### [Composable Views](./composable-views/)
+![Composable Views](./composable-views/composable-views.gif)
 
-# Cellbuffer example in this repo
-cargo run -p cellbuffer-example --bin cellbuffer
-```
+### [Credit Card Form](./credit-card-form/)
+![Credit Card Form](./credit-card-form/credit-card-form.gif)
 
-Most examples support quitting with one or more of: Esc, Enter, or Ctrl+C.
+### [Debounce](./debounce/)
+![Debounce](./debounce/debounce.gif)
 
-## Alternate screen (Alt Screen)
+### [Exec](./exec/)
+![Exec](./exec/exec.gif)
 
-Many TUIs use the terminal's alternate screen buffer for a clean, full-screen UI that restores the original screen on exit.
+### [File Picker](./file-picker/)
 
-- In bubbletea-rs, enable with `Program::builder().alt_screen(true)`.
-- Some terminals only send full mouse reporting when in alt screen.
-- If you are debugging display issues, temporarily set `.alt_screen(false)` to see printed debug output in the main buffer.
+### [Focus Blur](./focus-blur/)
 
-## Mouse support and motion modes
+### [Fullscreen](./fullscreen/)
+![Fullscreen](./fullscreen/fullscreentape.gif)
 
-bubbletea-rs supports mouse input via crossterm. Examples that react to mouse motion should:
+### [Glamour](./glamour/)
+![Glamour](./glamour/glamour.gif)
 
-- Enable motion mode in the program builder: `builder.mouse_motion(MouseMotion::Cell)`.
-- Handle `MouseMsg` in `update`:
-  - Many terminals emit `MouseEventKind::Moved` for hover/move.
-  - Some emit `MouseEventKind::Drag(_)` only while a button is pressed.
-  - Some emit `MouseEventKind::Down(_)` on press without separate move events.
+### [Help](./help/)
+![Help](./help/help.gif)
 
-For best compatibility, examples handle Moved, Drag(_), and Down(_).
+### [Http](./http/)
 
-### Terminal-specific notes
+### [List Default](./list-default/)
+![List Default](./list-default/list-default.gif)
 
-- macOS Terminal and iTerm2
-  - Generally work well with alt screen and cell-based mouse motion.
-  - If you see no updates, ensure the app is running in a real terminal (not an embedded IDE console).
+### [List Fancy](./list-fancy/)
 
-- Ghostty
-  - Works best with alt screen enabled.
-  - Ensure mouse reporting is enabled in preferences (e.g., "Report mouse movements" / "Report drag").
-  - Some builds only send motion while dragging; our examples also listen for Drag/Down events.
+### [List Simple](./list-simple/)
+![List Simple](./list-simple/list-simple.gif)
 
-- tmux
-  - Enable mouse in tmux: add `set -g mouse on` to your `~/.tmux.conf` and reload.
-  - Prefer a recent tmux version; older versions can have quirks with mouse tracking.
+### [Mouse](./mouse/)
 
-- SSH / Remote sessions
-  - Mouse reporting depends on the remote terminal and multiplexer configuration.
-  - Make sure `$TERM` is set to a terminfo that supports mouse (e.g., `xterm-256color`).
+### [Package Manager](./package-manager/)
+![Package Manager](./package-manager/package-manager.gif)
 
-## Window size detection
+### [Pager](./pager/)
+![Pager](./pager/page.gif)
 
-Examples that need layout sizing typically request the window size on init and react to `WindowSizeMsg`:
+### [Paginator](./paginator/)
+![Paginator](./paginator/paginator.gif)
 
-- Use `command::window_size()` on startup.
-- Update internal buffers on `WindowSizeMsg`.
-- Some examples initialize with a safe default size (e.g., 80x24) so something renders immediately, then update when the real size arrives.
+### [Pipe](./pipe/)
 
-## Troubleshooting checklist
+### [Prevent Quit](./prevent-quit/)
 
-- Nothing displays:
-  - Try `.alt_screen(false)` temporarily to see debug text.
-  - Confirm you’re in a real terminal (Terminal/iTerm2/Ghostty), not an editor console.
-  - Run `cargo check` to ensure the example compiles without errors.
+### [Progress Animated](./progress-animated/)
+![Progress Animated](./progress-animated/progress-animated.gif)
 
-- Mouse doesn’t move animations:
-  - Enable alt screen.
-  - Ensure terminal mouse reporting is enabled (see terminal-specific notes).
-  - If in tmux, enable mouse and use a recent tmux.
+### [Progress Download](./progress-download/)
 
-- Layout looks wrong after resize:
-  - Ensure your example listens to `WindowSizeMsg` and re-initializes any internal buffers.
+### [Progress Static](./progress-static/)
+![Progress Static](./progress-static/progress-static.gif)
 
-## Contributing to examples
+### [Realtime](./realtime/)
+![Realtime](./realtime/realtime.gif)
 
-- Keep examples small, focused, and runnable with a single command.
-- Favor idiomatic Rust and parity with upstream Bubble Tea examples when porting from Go.
-- Add brief comments and a short usage section when behavior may be surprising (e.g., spring physics, mouse modes).
+### [Result](./result/)
+![Result](./result/result.gif)
+
+### [Send Msg](./send-msg/)
+![Send Msg](./send-msg/send-msg.gif)
+
+### [Sequence](./sequence/)
+
+### [Set Window Title](./set-window-title/)
+
+### [Simple](./simple/)
+![Simple](./simple/simple.gif)
+
+### [Spinner](./spinner/)
+![Spinner](./spinner/spinner.gif)
+
+### [Spinners](./spinners/)
+![Spinners](./spinners/spinner.gif)
+
+### [Split Editors](./split-editors/)
+![Split Editors](./split-editors/split-editors.gif)
+
+### [Stopwatch](./stopwatch/)
+![Stopwatch](./stopwatch/stopwatch.gif)
+
+### [Suspend](./suspend/)
+
+### [Table](./table/)
+![Table](./table/table.gif)
+
+### [Table Resize](./table-resize/)
+
+### [Tabs](./tabs/)
+![Tabs](./tabs/tabs.gif)
+
+### [Textarea](./textarea/)
+
+### [Textinput](./textinput/)
+![Textinput](./textinput/textinput.gif)
+
+### [Textinputs](./textinputs/)
+![Textinputs](./textinputs/textinputs.gif)
+
+### [Timer](./timer/)
+![Timer](./timer/timer.gif)
+
+### [Timer Advanced](./timer-advanced/)
+
+### [Tui Daemon Combo](./tui-daemon-combo/)
+![Tui Daemon Combo](./tui-daemon-combo/tui-daemon-combo.gif)
+
+### [Views](./views/)
+![Views](./views/views.gif)
+
+### [Window Size](./window-size/)

@@ -1,5 +1,7 @@
 # Cellbuffer Example (bubbletea-rs)
 
+<img width="1200" src="./cellbuffer.gif" />
+
 A Rust port of Bubble Tea’s cellbuffer example. It draws an animated ellipse on a simple cell buffer and uses a spring to smoothly follow the mouse position.
 
 ## Run

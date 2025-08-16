@@ -1,5 +1,7 @@
 # Composable Views
 
+<img width="1200" src="./composable-views.gif" />
+
 This example demonstrates how to compose multiple sub-models (timer and spinner) into a single Bubble Tea application with focus management.
 
 ## Features

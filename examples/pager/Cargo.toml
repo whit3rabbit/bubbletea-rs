@@ -1,0 +1,15 @@
+[package]
+name = "pager-example"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "pager"
+path = "main.rs"
+
+[dependencies]
+bubbletea-rs = { path = "../.." }
+bubbletea-widgets = "0.1.9"
+lipgloss-extras = { version = "0.0.9", features = ["full"] }
+crossterm = "0.29"
+tokio = { version = "1.0", features = ["full"] }

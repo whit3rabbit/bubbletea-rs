@@ -1,5 +1,7 @@
 # List Default Example
 
+<img width="1200" src="./list-default.gif" />
+
 A direct Rust port of the Go Bubble Tea `list-default` example, demonstrating the List component from `bubbletea-widgets`.
 
 ## Features

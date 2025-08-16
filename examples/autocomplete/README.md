@@ -1,8 +1,8 @@
 # Autocomplete (Rust)
 
-Interactive autocomplete UI in the terminal using `bubbletea-rs`.
+<img width="1200" src="./autocomplete.gif" />
 
-![Demo](./autocomplete.gif)
+Interactive autocomplete UI in the terminal using `bubbletea-rs`.
 
 ## What it does
 - Fetches repository names from the Charmbracelet GitHub organization

@@ -27,7 +27,7 @@ Add these dependencies to your `Cargo.toml`:
 [dependencies]
 bubbletea-rs = "0.0.6"
 bubbletea-widgets = "0.1.10" 
-lipgloss-extras = { version = "0.0.8", features = ["full"] }
+lipgloss-extras = { version = "0.0.9", features = ["full"] }
 ```
 
 Then create your first TUI app:

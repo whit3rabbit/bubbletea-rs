@@ -1,8 +1,8 @@
 # Split Editors Example
 
-A faithful Rust port of the Go Bubble Tea [split-editors example](https://github.com/charmbracelet/bubbletea/tree/main/examples/split-editors), demonstrating advanced terminal UI concepts including full-width cursor line highlighting, focus management, and custom component development.
+<img width="1200" src="./split-editors.gif" />
 
-![Split Editors Demo](split-editors.gif)
+A faithful Rust port of the Go Bubble Tea [split-editors example](https://github.com/charmbracelet/bubbletea/tree/main/examples/split-editors), demonstrating advanced terminal UI concepts including full-width cursor line highlighting, focus management, and custom component development.
 
 ## ✨ Features
 

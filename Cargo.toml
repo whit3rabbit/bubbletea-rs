@@ -43,6 +43,15 @@ members = [
     "examples/sequence",
     "examples/set-window-title",
     "examples/split-editors",
+    "examples/suspend",
+    "examples/table-resize",
+    "examples/table",
+    "examples/tui-daemon-combo",
+    "examples/views",
+    "examples/package-manager",
+    "examples/pager",
+    "examples/paginator",
+    "examples/tabs",
 ]
 
 [patch.crates-io]
@@ -54,7 +63,7 @@ bubbletea-rs = { path = "." }
 name = "bubbletea-rs"
 exclude = ["examples"]
 autoexamples = false
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 authors = ["whit3rabbit"]
 description = "The fun, functional, and stateful way to build terminal apps in Rust."

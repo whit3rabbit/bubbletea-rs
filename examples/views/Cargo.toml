@@ -1,0 +1,14 @@
+[package]
+name = "views-example"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "views"
+path = "main.rs"
+
+[dependencies]
+bubbletea-rs = { path = "../.." }
+lipgloss-extras = { version = "0.0.9", features = ["full"] }
+crossterm = "0.29"
+tokio = { version = "1.0", features = ["full"] }

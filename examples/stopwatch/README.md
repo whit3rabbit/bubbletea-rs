@@ -1,5 +1,7 @@
 # Stopwatch
 
+<img width="1200" src="./stopwatch.gif">
+
 A direct port of the Go Bubble Tea stopwatch example demonstrating how to use `bubbletea-widgets` components. This example closely mirrors [`bubbletea/examples/stopwatch/main.go`](https://github.com/charmbracelet/bubbletea/blob/master/examples/stopwatch/main.go) behavior and output.
 
 ## Features

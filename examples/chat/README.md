@@ -1,8 +1,8 @@
 # Chat Example
 
-A terminal-based chat interface built with bubbletea-rs, demonstrating how to create a scrollable message view with text input.
+<img width="1200" src="./chat.gif" />
 
-![Chat Demo](./chat.gif)
+A terminal-based chat interface built with bubbletea-rs, demonstrating how to create a scrollable message view with text input.
 
 ## Features
 
@@ -387,7 +387,7 @@ cargo test --example chat
 [dependencies]
 bubbletea-rs = "0.0.6"
 bubbletea-widgets = "0.1.10"
-lipgloss-extras = { version = "0.0.8", features = ["full"] }
+lipgloss-extras = { version = "0.0.9", features = ["full"] }
 crossterm = "0.29"
 tokio = { version = "1", features = ["full"] }
 ```

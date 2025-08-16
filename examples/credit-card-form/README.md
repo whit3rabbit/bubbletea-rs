@@ -1,5 +1,7 @@
 # Credit Card Form
 
+<img width="1200" src="./credit-card-form.gif" />
+
 A credit card form example demonstrating input validation and field navigation using bubbletea-widgets.
 
 ## Features

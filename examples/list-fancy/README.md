@@ -1,5 +1,7 @@
 # List Fancy Example
 
+<img width="1200" src="./list-fancy.gif" />
+
 This example demonstrates advanced list functionality with the `bubbletea-widgets` List component, closely matching the Go Bubble Tea `list-fancy` example.
 
 ## Features
