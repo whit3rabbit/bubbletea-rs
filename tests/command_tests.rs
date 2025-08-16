@@ -1,5 +1,5 @@
 use bubbletea_rs::{
-    BatchMsgInternal, Cmd, DisableReportFocusMsg, EnableMouseAllMotionMsg, EnableReportFocusMsg,
+    event::{BatchCmdMsg, BatchMsgInternal}, Cmd, DisableReportFocusMsg, EnableMouseAllMotionMsg, EnableReportFocusMsg,
     InterruptMsg, KeyMsg, Msg, PrintMsg, PrintfMsg, QuitMsg, SuspendMsg,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
@@ -128,10 +128,8 @@ async fn test_batch_command() {
     let batch_cmd = bubbletea_rs::command::batch(vec![cmd1, cmd2]);
 
     let msg = batch_cmd.await.unwrap();
-    let batch_msg = msg.downcast_ref::<BatchMsgInternal>().unwrap();
-    assert_eq!(batch_msg.messages.len(), 2);
-    assert!(batch_msg.messages[0].downcast_ref::<QuitMsg>().is_some());
-    assert!(batch_msg.messages[1].downcast_ref::<KeyMsg>().is_some());
+    let batch_cmd_msg = msg.downcast_ref::<BatchCmdMsg>().unwrap();
+    assert_eq!(batch_cmd_msg.0.len(), 2);
 }
 
 #[tokio::test]
