@@ -1,6 +1,7 @@
 use bubbletea_rs::{
-    event::{BatchCmdMsg, BatchMsgInternal}, Cmd, DisableReportFocusMsg, EnableMouseAllMotionMsg, EnableReportFocusMsg,
-    InterruptMsg, KeyMsg, Msg, PrintMsg, PrintfMsg, QuitMsg, SuspendMsg,
+    event::{BatchCmdMsg, BatchMsgInternal},
+    Cmd, DisableReportFocusMsg, EnableMouseAllMotionMsg, EnableReportFocusMsg, InterruptMsg,
+    KeyMsg, Msg, PrintMsg, PrintfMsg, QuitMsg, SuspendMsg,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::time::Duration;
