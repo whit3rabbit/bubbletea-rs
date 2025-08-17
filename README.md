@@ -9,6 +9,12 @@ Build delightful terminal user interfaces with the Model-View-Update pattern, as
 
 > Status: Active development. Core APIs are stabilizing, but some interfaces may still evolve.
 
+## Examples
+
+I tried to match all the examples from the bubbletea repository in rust. You can view the examples here:
+
+https://github.com/whit3rabbit/bubbletea-rs/blob/main/examples/README.md
+
 ## The Ecosystem
 
 The Rust Bubble Tea ecosystem consists of three complementary crates:
@@ -19,45 +25,26 @@ The Rust Bubble Tea ecosystem consists of three complementary crates:
 | **bubbletea-widgets** | [bubbles-rs](https://github.com/whit3rabbit/bubbles-rs) | Pre-built UI components (spinners, inputs, tables, etc.) |
 | **lipgloss-extras** | [lipgloss-rs](https://github.com/whit3rabbit/lipgloss-rs) | Styling framework with colors, layouts, and rich text |
 
+Crates.io:
+
+All crates are published to crates.io:
+
+https://crates.io/crates/bubbletea-rs
+https://crates.io/crates/bubbletea-widgets
+https://crates.io/crates/lipgloss
+> https://crates.io/crates/lipgloss-extras
+> https://crates.io/crates/lipgloss-list
+> https://crates.io/crates/lipgloss-table
+
 ### Quick Start
 
 Add these dependencies to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-bubbletea-rs = "0.0.6"
-bubbletea-widgets = "0.1.10" 
-lipgloss-extras = { version = "0.0.9", features = ["full"] }
-```
-
-Then create your first TUI app:
-
-```rust
-use bubbletea_rs::{model::Model, program::ProgramBuilder, Msg};
-use lipgloss_extras::lipgloss::{Style, Color};
-
-struct MyModel {
-    counter: i32,
-}
-
-impl Model for MyModel {
-    fn update(&mut self, msg: Msg) -> bubbletea_rs::Result<()> {
-        // Handle key presses, timer ticks, etc.
-        Ok(())
-    }
-
-    fn view(&self) -> String {
-        Style::new()
-            .foreground(Color::from("#FF7CCB"))
-            .render(&format!("Counter: {}", self.counter))
-    }
-}
-
-#[tokio::main]
-async fn main() -> bubbletea_rs::Result<()> {
-    let model = MyModel { counter: 0 };
-    ProgramBuilder::new(model).build()?.run().await
-}
+bubbletea-rs = "0.0.7"
+bubbletea-widgets = "0.1.11" 
+lipgloss-extras = { version = "0.1.0", features = ["full"] }
 ```
 
 ## About
@@ -94,23 +81,7 @@ Bubble Tea (Go) popularized a functional, message-passing architecture for build
                         └─────────────────┘
 ```
 
-If you're familiar with the Go version, check our Go → Rust notes in the [API documentation](docs/API-BUBBLETEA-RS.md).
-
 ## Getting Started
-
-### Examples
-
-Each example is a standalone crate showcasing different features:
-
-| Example | Description | Features |
-|---------|-------------|----------|
-| **simple** | Basic counter app | Model-View-Update basics |
-| **spinner** | Loading indicators | bubbletea-widgets, styling |
-| **textinput** | Text input forms | User input, validation |
-| **progress** | Progress bars | Gradients, animations |
-| **chat** | Chat interface | Complex layouts, scrolling |
-| **table** | Data tables | Sorting, selection, pagination |
-| **help** | Help systems | Key bindings, auto-generation |
 
 To run any example:
 
@@ -150,24 +121,13 @@ cargo doc --open
 - **[Styling Guide](docs/API-LIPGLOSS.md)** - Colors, layouts, and theming
 - **[CLAUDE.md](CLAUDE.md)** - Development guidelines and patterns
 
-## Contributing
-
-Contributions are welcome! This project aims to:
-
-- Maintain 1:1 API compatibility with Bubble Tea (Go) where possible
-- Provide idiomatic Rust patterns and safety guarantees  
-- Support the full ecosystem of widgets and styling capabilities
-- Keep performance characteristics suitable for real applications
-
-Please see [CLAUDE.md](CLAUDE.md) for development guidelines and architectural notes.
-
 ## Ecosystem Status
 
 | Component | Status | Version | Notes |
 |-----------|--------|---------|-------|
-| bubbletea-rs | ✅ Active | v0.0.6 | Core framework stable |
-| bubbletea-widgets | ✅ Active | v0.1.9 | 13+ widgets available |
-| lipgloss-extras | ✅ Active | v0.0.8 | Full styling support |
+| bubbletea-rs | ✅ Active | v0.0.7 | Core framework stable |
+| bubbletea-widgets | ✅ Active | v0.1.11 | 13+ widgets available |
+| lipgloss-extras | ✅ Active | v0.1.0 | Full styling support |
 
 ## Inspiration & Credits
 
