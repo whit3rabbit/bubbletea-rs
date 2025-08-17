@@ -224,7 +224,7 @@ impl Model for TabModel {
                 // Multiple ways to move to the previous tab:
                 // - Left Arrow: Standard navigation
                 // - 'h': Vim-style left movement
-                // - 'p': Previous (mnemonic)  
+                // - 'p': Previous (mnemonic)
                 // - Shift+Tab: Standard reverse tab navigation
                 KeyCode::Left | KeyCode::Char('h') | KeyCode::Char('p') | KeyCode::BackTab => {
                     // Use saturating_sub() to handle underflow when at tab 0
@@ -364,7 +364,7 @@ impl Model for TabModel {
             // - Active: │ (vertical line continues to content border)
             // - Inactive: ├ (T-junction allows content border to continue)
             //
-            // Last Tab Connections:  
+            // Last Tab Connections:
             // - Active: │ (vertical line continues to content border)
             // - Inactive: ┤ (T-junction allows content border to continue)
             if is_first && is_active {

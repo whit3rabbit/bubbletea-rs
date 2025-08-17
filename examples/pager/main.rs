@@ -65,7 +65,9 @@
 //! Usage: cargo run --bin pager
 
 // bubbletea-rs core imports for MVU pattern
-use bubbletea_rs::{quit, window_size, KeyMsg, Model as BubbleTeaModel, MouseMotion, Msg, Program, WindowSizeMsg};
+use bubbletea_rs::{
+    quit, window_size, KeyMsg, Model as BubbleTeaModel, MouseMotion, Msg, Program, WindowSizeMsg,
+};
 
 // bubbletea-widgets for viewport component
 use bubbletea_widgets::viewport;
@@ -311,7 +313,10 @@ impl PagerModel {
         let scroll_percent = if self.content_lines.len() <= self.viewport.height {
             100.0 // If all content fits, we're at 100%
         } else {
-            let max_offset = self.content_lines.len().saturating_sub(self.viewport.height);
+            let max_offset = self
+                .content_lines
+                .len()
+                .saturating_sub(self.viewport.height);
             if max_offset == 0 {
                 100.0
             } else {
@@ -335,23 +340,23 @@ impl PagerModel {
     }
 
     /// Render the viewport content manually
-    /// 
+    ///
     /// Since we can't use the Model trait due to version conflicts,
     /// we implement basic viewport rendering ourselves
     fn viewport_view(&self) -> String {
         // Calculate which lines to show based on scroll offset and viewport height
         let start = self.scroll_offset;
         let end = std::cmp::min(start + self.viewport.height, self.content_lines.len());
-        
+
         // Get the visible lines
         let visible_lines = &self.content_lines[start..end];
-        
+
         // Pad with empty lines if we don't have enough content to fill the viewport
         let mut result = visible_lines.to_vec();
         while result.len() < self.viewport.height {
             result.push(String::new());
         }
-        
+
         result.join("\n")
     }
 }
@@ -402,7 +407,10 @@ impl BubbleTeaModel for PagerModel {
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
-                    let max_offset = self.content_lines.len().saturating_sub(self.viewport.height);
+                    let max_offset = self
+                        .content_lines
+                        .len()
+                        .saturating_sub(self.viewport.height);
                     if self.scroll_offset < max_offset {
                         self.scroll_offset += 1;
                     }
@@ -413,14 +421,20 @@ impl BubbleTeaModel for PagerModel {
                 }
                 KeyCode::PageDown => {
                     let page_size = self.viewport.height / 2;
-                    let max_offset = self.content_lines.len().saturating_sub(self.viewport.height);
+                    let max_offset = self
+                        .content_lines
+                        .len()
+                        .saturating_sub(self.viewport.height);
                     self.scroll_offset = std::cmp::min(self.scroll_offset + page_size, max_offset);
                 }
                 KeyCode::Home => {
                     self.scroll_offset = 0;
                 }
                 KeyCode::End => {
-                    self.scroll_offset = self.content_lines.len().saturating_sub(self.viewport.height);
+                    self.scroll_offset = self
+                        .content_lines
+                        .len()
+                        .saturating_sub(self.viewport.height);
                 }
                 _ => {}
             }
@@ -443,9 +457,12 @@ impl BubbleTeaModel for PagerModel {
                 (size_msg.height as usize).saturating_sub(vertical_margin),
             );
             self.viewport.set_content(&self.content);
-            
+
             // Reset scroll offset to ensure it's within bounds for new height
-            let max_offset = self.content_lines.len().saturating_sub(self.viewport.height);
+            let max_offset = self
+                .content_lines
+                .len()
+                .saturating_sub(self.viewport.height);
             self.scroll_offset = std::cmp::min(self.scroll_offset, max_offset);
             return None;
         }
