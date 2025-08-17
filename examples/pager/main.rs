@@ -65,7 +65,7 @@
 //! Usage: cargo run --bin pager
 
 // bubbletea-rs core imports for MVU pattern
-use bubbletea_rs::{quit, window_size, KeyMsg, Model, MouseMotion, Msg, Program, WindowSizeMsg};
+use bubbletea_rs::{quit, window_size, KeyMsg, Model as BubbleTeaModel, MouseMotion, Msg, Program, WindowSizeMsg};
 
 // bubbletea-widgets for viewport component
 use bubbletea_widgets::viewport;
@@ -203,6 +203,10 @@ pub struct PagerModel {
     ready: bool,
     /// The viewport component for scrollable display
     viewport: viewport::Model,
+    /// Manual scroll offset to work around version conflicts
+    scroll_offset: usize,
+    /// Content lines for manual scrolling
+    content_lines: Vec<String>,
 }
 
 impl PagerModel {
@@ -212,6 +216,9 @@ impl PagerModel {
         let content = fs::read_to_string("artichoke.md")
             .map_err(|e| format!("could not load file: {}", e))?;
 
+        // Split content into lines for manual scrolling
+        let content_lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+
         // Initialize with reasonable defaults (80x22) to account for header/footer
         let mut viewport = viewport::new(80, 22);
         viewport.set_content(&content);
@@ -220,6 +227,8 @@ impl PagerModel {
             content,
             ready: true, // Start ready immediately with defaults
             viewport,
+            scroll_offset: 0,
+            content_lines,
         })
     }
 
@@ -298,7 +307,17 @@ impl PagerModel {
     /// // width_visible(&info) = 7 (actual visual columns in terminal)
     /// ```
     fn footer_view(&self) -> String {
-        let scroll_percent = self.viewport.scroll_percent() * 100.0;
+        // Calculate scroll percentage manually
+        let scroll_percent = if self.content_lines.len() <= self.viewport.height {
+            100.0 // If all content fits, we're at 100%
+        } else {
+            let max_offset = self.content_lines.len().saturating_sub(self.viewport.height);
+            if max_offset == 0 {
+                100.0
+            } else {
+                (self.scroll_offset as f64 / max_offset as f64) * 100.0
+            }
+        };
 
         // Format as integer percentage (47% not 47.234%)
         let info = info_style().render(&format!("{:3.0}%", scroll_percent));
@@ -314,13 +333,34 @@ impl PagerModel {
         // Order matters: line FIRST, then info (creates right-alignment effect)
         join_horizontal(CENTER, &[&line, &info])
     }
+
+    /// Render the viewport content manually
+    /// 
+    /// Since we can't use the Model trait due to version conflicts,
+    /// we implement basic viewport rendering ourselves
+    fn viewport_view(&self) -> String {
+        // Calculate which lines to show based on scroll offset and viewport height
+        let start = self.scroll_offset;
+        let end = std::cmp::min(start + self.viewport.height, self.content_lines.len());
+        
+        // Get the visible lines
+        let visible_lines = &self.content_lines[start..end];
+        
+        // Pad with empty lines if we don't have enough content to fill the viewport
+        let mut result = visible_lines.to_vec();
+        while result.len() < self.viewport.height {
+            result.push(String::new());
+        }
+        
+        result.join("\n")
+    }
 }
 
 // =============================================================================
 // MODEL-VIEW-UPDATE (MVU) IMPLEMENTATION
 // =============================================================================
 
-impl Model for PagerModel {
+impl BubbleTeaModel for PagerModel {
     /// Initialize the model by loading content from disk
     ///
     /// ## bubbletea-rs Pattern: File Loading in Init
@@ -346,7 +386,7 @@ impl Model for PagerModel {
     /// The viewport component handles most navigation messages itself.
     /// We only need to intercept quit messages and window size changes.
     fn update(&mut self, msg: Msg) -> Option<bubbletea_rs::Cmd> {
-        // Handle keyboard input for quitting
+        // Handle keyboard input for navigation and quitting
         if let Some(key_msg) = msg.downcast_ref::<KeyMsg>() {
             match key_msg.key {
                 KeyCode::Char('q') | KeyCode::Esc => {
@@ -354,6 +394,33 @@ impl Model for PagerModel {
                 }
                 KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
                     return Some(quit());
+                }
+                // Manual viewport navigation since we can't delegate to viewport.update()
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if self.scroll_offset > 0 {
+                        self.scroll_offset -= 1;
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    let max_offset = self.content_lines.len().saturating_sub(self.viewport.height);
+                    if self.scroll_offset < max_offset {
+                        self.scroll_offset += 1;
+                    }
+                }
+                KeyCode::PageUp => {
+                    let page_size = self.viewport.height / 2;
+                    self.scroll_offset = self.scroll_offset.saturating_sub(page_size);
+                }
+                KeyCode::PageDown => {
+                    let page_size = self.viewport.height / 2;
+                    let max_offset = self.content_lines.len().saturating_sub(self.viewport.height);
+                    self.scroll_offset = std::cmp::min(self.scroll_offset + page_size, max_offset);
+                }
+                KeyCode::Home => {
+                    self.scroll_offset = 0;
+                }
+                KeyCode::End => {
+                    self.scroll_offset = self.content_lines.len().saturating_sub(self.viewport.height);
                 }
                 _ => {}
             }
@@ -376,12 +443,15 @@ impl Model for PagerModel {
                 (size_msg.height as usize).saturating_sub(vertical_margin),
             );
             self.viewport.set_content(&self.content);
+            
+            // Reset scroll offset to ensure it's within bounds for new height
+            let max_offset = self.content_lines.len().saturating_sub(self.viewport.height);
+            self.scroll_offset = std::cmp::min(self.scroll_offset, max_offset);
             return None;
         }
 
-        // Pass all other messages to the viewport for handling
-        // This includes arrow keys, page up/down, mouse wheel, etc.
-        self.viewport.update(msg)
+        // No need to delegate other messages since we handle navigation manually
+        None
     }
 
     /// Render the complete pager interface
@@ -400,7 +470,7 @@ impl Model for PagerModel {
         format!(
             "{}\n{}\n{}",
             self.header_view(),
-            self.viewport.view(),
+            self.viewport_view(),
             self.footer_view()
         )
     }

@@ -37,7 +37,7 @@ First, add the required dependencies to your `Cargo.toml`:
 [dependencies]
 bubbletea-rs = "0.0.6"
 bubbletea-widgets = "0.1.9"
-lipgloss-extras = { version = "0.0.9", features = ["full"] }
+lipgloss-extras = { version = "0.1.0", features = ["full"] }
 crossterm = "0.29"
 tokio = { version = "1.0", features = ["full"] }
 ```
