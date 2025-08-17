@@ -194,12 +194,12 @@ impl Model for TabModel {
                 // ============================================================
                 // EXIT COMMANDS
                 // ============================================================
-                /// Ctrl+C - Standard terminal interrupt signal
+                // Ctrl+C - Standard terminal interrupt signal
                 KeyCode::Char('c') if key_msg.modifiers.contains(KeyModifiers::CONTROL) => {
                     return Some(quit());
                 }
 
-                /// 'q' - Quick quit key, common in terminal applications
+                // 'q' - Quick quit key, common in terminal applications
                 KeyCode::Char('q') => {
                     return Some(quit());
                 }
@@ -207,11 +207,11 @@ impl Model for TabModel {
                 // ============================================================
                 // NAVIGATION - NEXT TAB
                 // ============================================================
-                /// Multiple ways to move to the next tab:
-                /// - Right Arrow: Standard navigation
-                /// - 'l': Vim-style right movement
-                /// - 'n': Next (mnemonic)
-                /// - Tab: Standard tab navigation
+                // Multiple ways to move to the next tab:
+                // - Right Arrow: Standard navigation
+                // - 'l': Vim-style right movement
+                // - 'n': Next (mnemonic)
+                // - Tab: Standard tab navigation
                 KeyCode::Right | KeyCode::Char('l') | KeyCode::Char('n') | KeyCode::Tab => {
                     // Use min() to prevent going past the last tab
                     // tabs.len() - 1 gives us the index of the last tab
@@ -221,11 +221,11 @@ impl Model for TabModel {
                 // ============================================================
                 // NAVIGATION - PREVIOUS TAB
                 // ============================================================
-                /// Multiple ways to move to the previous tab:
-                /// - Left Arrow: Standard navigation
-                /// - 'h': Vim-style left movement
-                /// - 'p': Previous (mnemonic)  
-                /// - Shift+Tab: Standard reverse tab navigation
+                // Multiple ways to move to the previous tab:
+                // - Left Arrow: Standard navigation
+                // - 'h': Vim-style left movement
+                // - 'p': Previous (mnemonic)  
+                // - Shift+Tab: Standard reverse tab navigation
                 KeyCode::Left | KeyCode::Char('h') | KeyCode::Char('p') | KeyCode::BackTab => {
                     // Use saturating_sub() to handle underflow when at tab 0
                     // max() ensures we never go below 0
@@ -280,26 +280,26 @@ impl Model for TabModel {
         // STEP 1: DEFINE TAB BORDER STYLES
         // ====================================================================
 
-        /// Border for inactive tabs - fully enclosed with T-junctions
-        /// ┌─────────┐
-        /// │ Inactive│
-        /// └─────────┘  ← Closed bottom with ┴ characters
+        // Border for inactive tabs - fully enclosed with T-junctions
+        // ┌─────────┐
+        // │ Inactive│
+        // └─────────┘  ← Closed bottom with ┴ characters
         let inactive_tab_border = tab_border_with_bottom("┴", "─", "┴");
 
-        /// Border for active tabs - open bottom connects to content window
-        /// ┌─────────┐
-        /// │ Active  │
-        /// ┘         └  ← Open bottom with corner characters
+        // Border for active tabs - open bottom connects to content window
+        // ┌─────────┐
+        // │ Active  │
+        // ┘         └  ← Open bottom with corner characters
         let active_tab_border = tab_border_with_bottom("┘", " ", "└");
 
         // ====================================================================
         // STEP 2: CREATE STYLING DEFINITIONS
         // ====================================================================
 
-        /// Base style for inactive tabs
-        /// - Purple border color (#874BFD) for consistent theming
-        /// - 1 unit horizontal padding for text spacing
-        /// - All borders enabled to create complete enclosure
+        // Base style for inactive tabs
+        // - Purple border color (#874BFD) for consistent theming
+        // - 1 unit horizontal padding for text spacing
+        // - All borders enabled to create complete enclosure
         let inactive_tab_style = Style::new()
             .border_style(inactive_tab_border)
             .border_foreground(Color::from("#874BFD")) // Purple theme color
@@ -309,15 +309,15 @@ impl Model for TabModel {
             .border_right(true)
             .border_bottom(true);
 
-        /// Active tab style inherits from inactive but uses different border
-        /// This ensures consistent styling except for the connection behavior
+        // Active tab style inherits from inactive but uses different border
+        // This ensures consistent styling except for the connection behavior
         let active_tab_style = inactive_tab_style.clone().border_style(active_tab_border);
 
-        /// Content window style
-        /// - No top border to connect seamlessly with tabs
-        /// - Purple border matching tab colors
-        /// - Vertical padding for content spacing
-        /// - Center-aligned text
+        // Content window style
+        // - No top border to connect seamlessly with tabs
+        // - Purple border matching tab colors
+        // - Vertical padding for content spacing
+        // - Center-aligned text
         let window_style = Style::new()
             .border_foreground(Color::from("#874BFD"))
             .padding(2, 0, 2, 0) // Vertical padding for readability
@@ -328,7 +328,7 @@ impl Model for TabModel {
             .border_right(true)
             .border_bottom(true);
 
-        /// Overall document style adds outer padding around the entire interface
+        // Overall document style adds outer padding around the entire interface
         let doc_style = Style::new().padding(1, 2, 1, 2);
 
         // ====================================================================
@@ -357,16 +357,16 @@ impl Model for TabModel {
             // STEP 3A: CUSTOMIZE BORDER CONNECTIONS FOR FIRST/LAST TABS
             // ================================================================
 
-            /// The first and last tabs need special border characters to
-            /// connect properly with the content window's left and right edges.
-            ///
-            /// First Tab Connections:
-            /// - Active: │ (vertical line continues to content border)
-            /// - Inactive: ├ (T-junction allows content border to continue)
-            ///
-            /// Last Tab Connections:  
-            /// - Active: │ (vertical line continues to content border)
-            /// - Inactive: ┤ (T-junction allows content border to continue)
+            // The first and last tabs need special border characters to
+            // connect properly with the content window's left and right edges.
+            //
+            // First Tab Connections:
+            // - Active: │ (vertical line continues to content border)
+            // - Inactive: ├ (T-junction allows content border to continue)
+            //
+            // Last Tab Connections:  
+            // - Active: │ (vertical line continues to content border)
+            // - Inactive: ┤ (T-junction allows content border to continue)
             if is_first && is_active {
                 border.bottom_left = "│"; // Vertical connection to content
             } else if is_first && !is_active {
@@ -386,9 +386,9 @@ impl Model for TabModel {
         // STEP 4: COMBINE TABS HORIZONTALLY
         // ====================================================================
 
-        /// Join all rendered tabs horizontally with TOP alignment
-        /// This ensures all tabs align at their top edges, creating a clean
-        /// tab row regardless of individual tab content or styling differences
+        // Join all rendered tabs horizontally with TOP alignment
+        // This ensures all tabs align at their top edges, creating a clean
+        // tab row regardless of individual tab content or styling differences
         let row = join_horizontal(
             TOP,
             &rendered_tabs.iter().map(String::as_str).collect::<Vec<_>>(),
@@ -398,15 +398,15 @@ impl Model for TabModel {
         // STEP 5: CREATE CONTENT WINDOW WITH MATCHING WIDTH
         // ====================================================================
 
-        /// Calculate content width to match the tab row width exactly
-        /// - width(&row) gets the total display width of the tab row
-        /// - get_horizontal_frame_size() accounts for the content window's
-        ///   left and right border thickness
-        /// - This ensures the content window aligns perfectly with the tabs
+        // Calculate content width to match the tab row width exactly
+        // - width(&row) gets the total display width of the tab row
+        // - get_horizontal_frame_size() accounts for the content window's
+        //   left and right border thickness
+        // - This ensures the content window aligns perfectly with the tabs
         let content_width = width(&row) as i32 - window_style.get_horizontal_frame_size();
 
-        /// Render the content window with calculated width
-        /// Uses the content for the currently active tab
+        // Render the content window with calculated width
+        // Uses the content for the currently active tab
         let content = window_style
             .width(content_width)
             .render(&self.tab_content[self.active_tab]);
@@ -415,16 +415,16 @@ impl Model for TabModel {
         // STEP 6: COMBINE TAB ROW AND CONTENT VERTICALLY
         // ====================================================================
 
-        /// Stack the tab row above the content window
-        /// The \n creates the vertical separation between the two elements
+        // Stack the tab row above the content window
+        // The \n creates the vertical separation between the two elements
         let result = format!("{}\n{}", row, content);
 
         // ====================================================================
         // STEP 7: APPLY DOCUMENT-LEVEL STYLING
         // ====================================================================
 
-        /// Apply overall padding and any document-level styling
-        /// This creates spacing around the entire tabbed interface
+        // Apply overall padding and any document-level styling
+        // This creates spacing around the entire tabbed interface
         doc_style.render(&result)
     }
 }
@@ -459,48 +459,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // PROGRAM SETUP
     // ========================================================================
 
-    /// Create and configure the bubbletea-rs program
-    ///
-    /// Program::<TabModel> specifies that this program will use TabModel
-    /// as its application state. The type parameter ensures type safety
-    /// throughout the entire application lifecycle.
-    ///
-    /// The builder pattern allows for future customization without breaking
-    /// existing code. Common builder options include:
-    /// - .signal_handler(true) for Ctrl+C/Ctrl+Z support
-    /// - .mouse_support(true) for mouse input
-    /// - .alt_screen(true) for full-screen applications
+    // Create and configure the bubbletea-rs program
+    //
+    // Program::<TabModel> specifies that this program will use TabModel
+    // as its application state. The type parameter ensures type safety
+    // throughout the entire application lifecycle.
+    //
+    // The builder pattern allows for future customization without breaking
+    // existing code. Common builder options include:
+    // - .signal_handler(true) for Ctrl+C/Ctrl+Z support
+    // - .mouse_support(true) for mouse input
+    // - .alt_screen(true) for full-screen applications
     let program = Program::<TabModel>::builder().build()?;
 
     // ========================================================================
     // PROGRAM EXECUTION WITH ERROR HANDLING
     // ========================================================================
 
-    /// Run the program and handle different types of termination
-    ///
-    /// program.run() returns a Result that indicates how the program ended:
-    /// - Ok(model) - Normal termination via quit() command
-    /// - Err(Error::Interrupted) - Ctrl+C or signal termination
-    /// - Err(Error::ProgramKilled) - Force kill via kill() command
-    /// - Err(other) - Unexpected errors (I/O, terminal issues, etc.)
+    // Run the program and handle different types of termination
+    //
+    // program.run() returns a Result that indicates how the program ended:
+    // - Ok(model) - Normal termination via quit() command
+    // - Err(Error::Interrupted) - Ctrl+C or signal termination
+    // - Err(Error::ProgramKilled) - Force kill via kill() command
+    // - Err(other) - Unexpected errors (I/O, terminal issues, etc.)
     if let Err(err) = program.run().await {
         match err {
-            /// Unix convention: exit code 130 for SIGINT (Ctrl+C)
-            /// This allows shell scripts and other programs to distinguish
-            /// between user interruption and other types of program termination
+            // Unix convention: exit code 130 for SIGINT (Ctrl+C)
+            // This allows shell scripts and other programs to distinguish
+            // between user interruption and other types of program termination
             bubbletea_rs::Error::Interrupted => {
                 std::process::exit(130);
             }
 
-            /// Exit code 1 for force kill - indicates abnormal termination
-            /// This is used when the program needs to exit immediately
-            /// without normal cleanup procedures
+            // Exit code 1 for force kill - indicates abnormal termination
+            // This is used when the program needs to exit immediately
+            // without normal cleanup procedures
             bubbletea_rs::Error::ProgramKilled => {
                 std::process::exit(1);
             }
 
-            /// Handle unexpected errors (I/O failures, terminal issues, etc.)
-            /// Print the error message and exit with code 1 to indicate failure
+            // Handle unexpected errors (I/O failures, terminal issues, etc.)
+            // Print the error message and exit with code 1 to indicate failure
             _ => {
                 eprintln!("Error: {}", err);
                 std::process::exit(1);
@@ -512,7 +512,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // NORMAL TERMINATION
     // ========================================================================
 
-    /// If we reach this point, the program terminated normally via quit()
-    /// Return Ok(()) to indicate successful completion to the operating system
+    // If we reach this point, the program terminated normally via quit()
+    // Return Ok(()) to indicate successful completion to the operating system
     Ok(())
 }
