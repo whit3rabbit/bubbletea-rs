@@ -25,16 +25,16 @@ The Rust Bubble Tea ecosystem consists of three complementary crates:
 | **bubbletea-widgets** | [bubbles-rs](https://github.com/whit3rabbit/bubbles-rs) | Pre-built UI components (spinners, inputs, tables, etc.) |
 | **lipgloss-extras** | [lipgloss-rs](https://github.com/whit3rabbit/lipgloss-rs) | Styling framework with colors, layouts, and rich text |
 
-Crates.io:
+### Crates.io:
 
 All crates are published to crates.io:
 
-https://crates.io/crates/bubbletea-rs
-https://crates.io/crates/bubbletea-widgets
-https://crates.io/crates/lipgloss
-> https://crates.io/crates/lipgloss-extras
-> https://crates.io/crates/lipgloss-list
-> https://crates.io/crates/lipgloss-table
+* https://crates.io/crates/bubbletea-rs
+* https://crates.io/crates/bubbletea-widgets
+* https://crates.io/crates/lipgloss
+* > https://crates.io/crates/lipgloss-extras
+* > https://crates.io/crates/lipgloss-list
+* > https://crates.io/crates/lipgloss-table
 
 ### Quick Start
 
