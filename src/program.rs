@@ -3,8 +3,9 @@
 //! The `Program` sets up the terminal, handles input, executes commands, and renders
 //! the model's view.
 
-use crate::event::KillMsg;
-use crate::{Error, InputHandler, InputSource, Model, Msg, QuitMsg, Terminal, TerminalInterface};
+use crate::event::{KillMsg, RequestWindowSizeMsg};
+use crate::{Error, InputHandler, InputSource, Model, Msg, QuitMsg, Terminal, TerminalInterface,
+            WindowSizeMsg};
 use futures::{future::FutureExt, select};
 use std::marker::PhantomData;
 use std::panic;
@@ -702,6 +703,17 @@ impl<M: Model> Program<M> {
                                 }
                             }
                             continue; // Don't pass this to the model
+                        } else if msg.is::<RequestWindowSizeMsg>() {
+                            if let Some((width, height)) = self
+                                .terminal
+                                .as_ref()
+                                .and_then(|terminal| terminal.size().ok())
+                            {
+                                let _ = self
+                                    .event_tx
+                                    .send(Box::new(WindowSizeMsg { width, height }) as Msg);
+                            }
+                            continue;
                         } else {
                             // Handle regular messages
                             let is_quit = msg.downcast_ref::<QuitMsg>().is_some();
