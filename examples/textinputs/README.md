@@ -142,7 +142,7 @@ fn view(&self) -> String {
 
 **Root Cause:** This was a rendering bug in the textinput widget's placeholder handling.
 
-**Solution:** Update to `bubbletea-widgets` version 0.0.7 or later. This bug has been fixed.
+**Solution:** Update to `bubbletea-widgets` version 0.0.8 or later. This bug has been fixed.
 
 ```toml
 bubbletea-widgets = "0.1.10"  # Fixed version
