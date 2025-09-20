@@ -4,8 +4,10 @@
 //! the model's view.
 
 use crate::event::{KillMsg, RequestWindowSizeMsg};
-use crate::{Error, InputHandler, InputSource, Model, Msg, QuitMsg, Terminal, TerminalInterface,
-            WindowSizeMsg};
+use crate::{
+    Error, InputHandler, InputSource, Model, Msg, QuitMsg, Terminal, TerminalInterface,
+    WindowSizeMsg,
+};
 use futures::{future::FutureExt, select};
 use std::marker::PhantomData;
 use std::panic;
