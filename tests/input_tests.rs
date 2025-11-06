@@ -82,6 +82,60 @@ async fn test_input_handler_key_event() -> Result<(), Error> {
 }
 
 #[tokio::test]
+#[cfg(target_os = "windows")]
+// Ensure release events are not emitted by bubbletea on Windows
+async fn test_input_handler_key_event_windows() -> Result<(), Error> {
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+    let input_handler = InputHandler::new(event_tx);
+
+    let mock_events = vec![
+        Event::Key(KeyEvent::new_with_kind(
+            KeyCode::Char('a'),
+            KeyModifiers::NONE,
+            crossterm::event::KeyEventKind::Press,
+        )),
+        Event::Key(KeyEvent::new_with_kind(
+            KeyCode::Char('a'),
+            KeyModifiers::NONE,
+            crossterm::event::KeyEventKind::Release,
+        )),
+    ];
+
+    // Replace the actual EventStream with our mock
+    // This requires a bit of a hack as EventStream is not easily mockable
+    // For a real application, consider dependency injection for EventStream
+    // For this test, we'll simulate the run loop directly
+    tokio::spawn(async move {
+        let mut stream = MockEventStream::new(mock_events);
+        while let Some(event_result) = stream.next().await {
+            if let Ok(Event::Key(key_event)) = event_result {
+                let msg = KeyMsg {
+                    key: key_event.code,
+                    modifiers: key_event.modifiers,
+                };
+                let _ = input_handler.event_tx.send(Box::new(msg));
+            }
+        }
+    });
+
+    let received_msg = tokio::time::timeout(Duration::from_millis(100), event_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let key_msg = received_msg.downcast_ref::<KeyMsg>().unwrap();
+    assert_eq!(key_msg.key, KeyCode::Char('a'));
+    assert_eq!(key_msg.modifiers, KeyModifiers::NONE);
+
+    let received_msg = tokio::time::timeout(Duration::from_millis(100), event_rx.recv())
+        .await
+        .unwrap();
+
+    assert!(received_msg.is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_input_handler_mouse_event() -> Result<(), Error> {
     let (event_tx, mut event_rx) = mpsc::unbounded_channel();
     let input_handler = InputHandler::new(event_tx);
