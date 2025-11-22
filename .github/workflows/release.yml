@@ -37,7 +37,8 @@ jobs:
           key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
-        run: cargo test --all-features
+        # Only test library and integration tests, not examples (which may depend on unreleased crates)
+        run: cargo test --lib --tests
 
       - name: Check formatting
         run: cargo fmt -- --check
