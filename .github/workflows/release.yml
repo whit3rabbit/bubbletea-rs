@@ -37,8 +37,8 @@ jobs:
           key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
-        # Only test library and integration tests, not examples (which may depend on unreleased crates)
-        run: cargo test --lib --tests
+        # Only test the main package, not examples (which may depend on unreleased crates)
+        run: cargo test -p bubbletea-rs
 
       - name: Check formatting
         run: cargo fmt -- --check
