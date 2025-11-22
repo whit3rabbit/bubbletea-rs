@@ -50,8 +50,8 @@ First, add these dependencies to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-bubbletea-rs = "0.0.6"           # The main framework
-bubbletea-widgets = "0.1.10"      # Pre-built UI components
+bubbletea-rs = "0.0.9"           # The main framework
+bubbletea-widgets = "0.1.12"      # Pre-built UI components
 tokio = { version = "1.0", features = ["full"] }  # Async runtime
 crossterm = "0.29"                # Terminal manipulation
 ```

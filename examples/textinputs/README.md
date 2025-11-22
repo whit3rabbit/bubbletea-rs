@@ -52,8 +52,8 @@ Add these to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-bubbletea-rs = "0.0.6"           # The main TUI framework
-bubbletea-widgets = "0.1.10"      # Pre-built UI components including textinput
+bubbletea-rs = "0.0.9"           # The main TUI framework
+bubbletea-widgets = "0.1.12"      # Pre-built UI components including textinput
 lipgloss-extras = { version = "0.1.0", features = ["full"] }  # Styling
 crossterm = "0.29"               # Terminal interaction
 tokio = { version = "1.0", features = ["full"] }  # Async runtime
@@ -145,7 +145,7 @@ fn view(&self) -> String {
 **Solution:** Update to `bubbletea-widgets` version 0.0.8 or later. This bug has been fixed.
 
 ```toml
-bubbletea-widgets = "0.1.10"  # Fixed version
+bubbletea-widgets = "0.1.12"  # Fixed version
 ```
 
 ### Problem: "Cursor isn't blinking"
