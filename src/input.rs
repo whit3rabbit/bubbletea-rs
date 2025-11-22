@@ -234,8 +234,22 @@ impl InputHandler {
                         key: key_event.code,
                         modifiers: key_event.modifiers,
                     };
-                    if event_tx.send(Box::new(msg)).is_err() {
-                        break;
+
+                    // Skip key_event.is_release() on Windows to prevent double keys
+                    #[cfg(target_os = "windows")]
+                    {
+                        if key_event.is_press() {
+                            if event_tx.send(Box::new(msg)).is_err() {
+                                break;
+                            }
+                        }
+                    }
+
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        if event_tx.send(Box::new(msg)).is_err() {
+                            break;
+                        }
                     }
                 }
                 Ok(Event::Mouse(mouse_event)) => {
