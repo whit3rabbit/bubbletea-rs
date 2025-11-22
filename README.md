@@ -44,7 +44,7 @@ Add these dependencies to your `Cargo.toml`:
 [dependencies]
 bubbletea-rs = "0.0.9"
 bubbletea-widgets = "0.1.12" 
-lipgloss-extras = { version = "0.1.0", features = ["full"] }
+lipgloss-extras = { version = "0.1.1", features = ["full"] }
 ```
 
 ## About
@@ -127,7 +127,7 @@ cargo doc --open
 |-----------|--------|---------|-------|
 | bubbletea-rs | ✅ Active | v0.0.9 | Core framework stable |
 | bubbletea-widgets | ✅ Active | v0.1.12 | 13+ widgets available |
-| lipgloss-extras | ✅ Active | v0.1.0 | Full styling support |
+| lipgloss-extras | ✅ Active | v0.1.1 | Full styling support |
 
 ## Inspiration & Credits
 

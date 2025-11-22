@@ -387,7 +387,7 @@ cargo test --example chat
 [dependencies]
 bubbletea-rs = "0.0.9"
 bubbletea-widgets = "0.1.12"
-lipgloss-extras = { version = "0.1.0", features = ["full"] }
+lipgloss-extras = { version = "0.1.1", features = ["full"] }
 crossterm = "0.29"
 tokio = { version = "1", features = ["full"] }
 ```

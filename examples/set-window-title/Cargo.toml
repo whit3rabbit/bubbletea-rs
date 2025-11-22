@@ -9,5 +9,5 @@ path = "main.rs"
 
 [dependencies]
 bubbletea-rs = { path = "../.." }
-lipgloss-extras = { version = "0.1.0", features = ["full"] }
+lipgloss-extras = { version = "0.1.1", features = ["full"] }
 tokio = { version = "1.0", features = ["full"] }
