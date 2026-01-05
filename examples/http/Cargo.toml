@@ -11,5 +11,5 @@ path = "main.rs"
 bubbletea-rs = { path = "../../" }
 crossterm = "0.29"
 tokio = { version = "1.25.0", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.13", features = ["json", "rustls-tls"], default-features = false }
 http = "1.3"
