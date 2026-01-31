@@ -23,7 +23,7 @@
 
 use crate::Error;
 use crossterm::{
-    cursor::{Hide, Show},
+    cursor::{Hide, MoveTo, MoveToPreviousLine, Show},
     event::{
         DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
         EnableFocusChange, EnableMouseCapture,
@@ -436,6 +436,7 @@ impl TerminalInterface for Terminal {
     async fn enter_alt_screen(&mut self) -> Result<(), Error> {
         if !self.alt_screen {
             execute!(io::stdout(), EnterAlternateScreen)?;
+            execute!(io::stdout(), MoveTo(0, 0))?;
             // Clear the alternate screen buffer immediately after entering
             execute!(io::stdout(), terminal::Clear(terminal::ClearType::All))?;
             io::stdout().flush()?;
@@ -554,6 +555,13 @@ impl TerminalInterface for Terminal {
             // Pre-allocate buffer for efficient rendering
             self.render_buffer.clear();
 
+            // Moving to the beginning of the section, that we rendered
+            if self.alt_screen {
+                execute!(io::stdout(), MoveTo(0, 0))?;
+            } else if self.last_lines_rendered > 1 {
+                execute!(io::stdout(), MoveToPreviousLine(self.last_lines_rendered))?;
+            }
+
             // Reserve space for content plus newline replacements
             let new_lines = content.chars().filter(|&c| c == '\n').count();
             let estimated_size = content.len() + new_lines;
@@ -568,6 +576,10 @@ impl TerminalInterface for Terminal {
                 }
             }
 
+            execute!(
+                io::stdout(),
+                terminal::Clear(terminal::ClearType::FromCursorDown)
+            )?;
             print!("{}", self.render_buffer);
             io::stdout().flush()?;
             self.last_lines_rendered = new_lines as u16;
