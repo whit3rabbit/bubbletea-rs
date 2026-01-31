@@ -375,6 +375,7 @@ pub struct Terminal {
     output_writer: Option<Arc<Mutex<dyn AsyncWrite + Send + Unpin>>>,
     /// Reusable buffer for string operations to minimize allocations
     render_buffer: String,
+    last_lines_rendered: u16,
 }
 
 impl Terminal {
@@ -393,6 +394,7 @@ impl Terminal {
             cursor_visible: true,
             output_writer,
             render_buffer: String::with_capacity(8192), // Pre-allocate 8KB buffer
+            last_lines_rendered: 0,
         })
     }
 }
@@ -411,6 +413,7 @@ impl TerminalInterface for Terminal {
             cursor_visible: true,
             output_writer,
             render_buffer: String::with_capacity(8192),
+            last_lines_rendered: 0,
         })
     }
 
@@ -552,7 +555,8 @@ impl TerminalInterface for Terminal {
             self.render_buffer.clear();
 
             // Reserve space for content plus newline replacements
-            let estimated_size = content.len() + content.chars().filter(|&c| c == '\n').count();
+            let new_lines = content.chars().filter(|&c| c == '\n').count();
+            let estimated_size = content.len() + new_lines;
             self.render_buffer.reserve(estimated_size);
 
             // Efficiently replace newlines by iterating through chars
@@ -566,6 +570,7 @@ impl TerminalInterface for Terminal {
 
             print!("{}", self.render_buffer);
             io::stdout().flush()?;
+            self.last_lines_rendered = new_lines as u16;
         }
         Ok(())
     }
